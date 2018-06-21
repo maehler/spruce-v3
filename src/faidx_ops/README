@@ -1,0 +1,2 @@
+Slightly more custom version of a basic FAIDX to enable efficient random access filtering
+of huge FASTA files

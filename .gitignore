@@ -3,3 +3,7 @@ longest_n
 *.so
 *.a
 *.pyc
+build_index
+print_index
+*.fa
+*.idx
