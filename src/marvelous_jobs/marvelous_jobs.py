@@ -10,20 +10,32 @@ def is_project(directory='.'):
     db_name = os.path.abspath(os.path.join(directory, 'marveldb'))
     return os.path.exists(db_name)
 
-def init(directory='.', force=False):
-    if is_project() and not force:
+def init(name, coverage, directory='.', force=False):
+    if is_project(directory) and not force:
         print('error: project is already initialised, delete '
               '`marveldb` or use --force if you want to start over',
              file=sys.stderr)
         exit(1)
     db_name = os.path.join(directory, 'marveldb')
-    mj.marvel_db(db_name)
+    mj.marvel_db(filename=db_name, name=name,
+                 coverage=coverage, force=force)
+
+def prepare(fasta, blocksize):
+    pass
+
+def info():
+    db_name = os.path.join('.', 'marveldb')
+    db = mj.marvel_db.from_file(db_name)
+    project_info = db.info()
+    print('MARVEL project started on {0}'.format(project_info['started on']))
+    for k, v in db.info().items():
+        print('{0:>11}: {1}'.format(k, v))
 
 # Helper functions for the argument parsing
 def directory_exists(s):
     return os.path.exists(s) and os.path.isdir(s)
 
-def posititive_integer(i):
+def positive_integer(i):
     return type(i) is int and i > 0
 
 def parse_args():
@@ -34,19 +46,22 @@ def parse_args():
 
     # Initialisation
     init_parser = subparsers.add_parser('init', help='Initialise a new project')
+    init_parser.add_argument('name', help='name of the project')
+    init_parser.add_argument('-x', '--coverage', help='sequencing coverage of'
+                             ' the project (default: 30)', default=30,
+                             type=int)
     init_parser.add_argument('directory', help='directory where to '
                              'initialise the run (default: .)',
                              default='.', nargs='?')
-    init_parser.add_argument('-f', '--force', help='Force overwrite of '
+    init_parser.add_argument('-f', '--force', help='force overwrite of '
                              'existing database', action='store_true')
+
+    # Info
+    info_parser = subparsers.add_parser('info', help='Show project info')
 
     # DBprepare
     prep_parser = subparsers.add_parser('prepare', help='Prepare data files')
-    prep_parser.add_argument('wd', help='working directory')
-    prep_parser.add_argument('db',
-                             help='Name of the resulting database')
-    prep_parser.add_argument('fasta',
-                             help='Input reads in FASTA format')
+    prep_parser.add_argument('fasta', help='Input reads in FASTA format')
     prep_parser.add_argument('-s', '--blocksize',
                              help='Database block size in megabases (default: 200)',
                              default=200, type=int, metavar='N',
@@ -58,6 +73,8 @@ def parse_args():
         args.directory = os.path.abspath(args.directory)
         if not directory_exists(args.directory):
             parser.error('directory not found: {0}'.format(args.directory))
+        if not positive_integer(args.coverage):
+            parser.error('coverage must be a positive non-zero integer')
 
     if args.subcommand == 'prepare':
         if not positive_integer(args.blocksize):
@@ -72,7 +89,12 @@ def main():
     args = parse_args()
 
     if args.subcommand == 'init':
-        init(args.directory, force=args.force)
+        init(directory=args.directory, name=args.name,
+             coverage=args.coverage, force=args.force)
+    if args.subcommand == 'prepare':
+        prepare(fasta=args.fasta, blocksize=args.blocksize)
+    if args.subcommand == 'info':
+        info()
 
 if __name__ == '__main__':
     main()
