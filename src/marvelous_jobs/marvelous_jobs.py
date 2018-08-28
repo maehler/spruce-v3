@@ -2,9 +2,12 @@
 
 import argparse
 import os
+from subprocess import Popen, PIPE
 import sys
 
 import marvelous_jobs as mj
+
+import marvel
 
 def is_project(directory='.'):
     db_name = os.path.abspath(os.path.join(directory, 'marveldb'))
@@ -21,7 +24,30 @@ def init(name, coverage, directory='.', force=False):
                  coverage=coverage, force=force)
 
 def prepare(fasta, blocksize):
-    pass
+    db_name = os.path.join('.', 'marveldb')
+    db = mj.marvel_db.from_file(db_name)
+    projname = db.info('name')
+    args = [
+        'DBprepare.py',
+        '--blocksize', str(blocksize),
+        projname,
+        fasta
+    ]
+    p = Popen(args, shell=False)
+    p.wait()
+
+    if p.returncode != 0:
+        print('an error has occured in DBprepare.py', file=sys.stderr)
+        sys.exit(p.returncode)
+
+    prepare_db_filename = '{0}.db'.format(projname)
+    with open(prepare_db_filename) as f:
+        for line in f:
+            if line.strip().startswith('blocks'):
+                n_blocks = int(line.strip().split()[-1])
+
+    for i in range(1, n_blocks + 1):
+        db.add_block(i, '{0}.{1}'.format(projname, i))
 
 def info():
     db_name = os.path.join('.', 'marveldb')
