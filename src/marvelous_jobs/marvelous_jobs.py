@@ -10,10 +10,10 @@ def is_project(directory='.'):
     db_name = os.path.abspath(os.path.join(directory, 'marveldb'))
     return os.path.exists(db_name)
 
-def init(directory='.'):
-    if is_project():
+def init(directory='.', force=False):
+    if is_project() and not force:
         print('error: project is already initialised, delete '
-              '`marveldb` if you want to start over',
+              '`marveldb` or use --force if you want to start over',
              file=sys.stderr)
         exit(1)
     db_name = os.path.join(directory, 'marveldb')
@@ -37,6 +37,8 @@ def parse_args():
     init_parser.add_argument('directory', help='directory where to '
                              'initialise the run (default: .)',
                              default='.', nargs='?')
+    init_parser.add_argument('-f', '--force', help='Force overwrite of '
+                             'existing database', action='store_true')
 
     # DBprepare
     prep_parser = subparsers.add_parser('prepare', help='Prepare data files')
@@ -70,7 +72,7 @@ def main():
     args = parse_args()
 
     if args.subcommand == 'init':
-        init(args.directory)
+        init(args.directory, force=args.force)
 
 if __name__ == '__main__':
     main()
