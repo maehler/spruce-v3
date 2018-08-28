@@ -6,6 +6,7 @@ class marvel_db:
     def __init__(self, filename, name, coverage, force=False):
         is_new = not os.path.exists(filename)
         self._db = sqlite3.connect(filename)
+        self._db.row_factory = sqlite3.Row
         self._c = self._db.cursor()
 
         if force:
@@ -41,7 +42,12 @@ class marvel_db:
     def add_block(self):
         pass
 
-    def info(self):
+    def info(self, key=None):
         self._c.execute('''SELECT name, coverage, started_on FROM project''')
-        res = self._c.fetchone();
-        return {'name': res[0], 'coverage': res[1], 'started on': res[2]}
+        res = self._c.fetchone()
+        if key is None:
+            return {'name': res[0], 'coverage': res[1], 'started on': res[2]}
+        else:
+            if key not in res.keys():
+                raise KeyError('"{0}" not a valid key'.format(key))
+            return res[res.keys().index(key)]
