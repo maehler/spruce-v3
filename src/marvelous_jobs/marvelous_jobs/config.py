@@ -20,6 +20,12 @@ class marvelous_config:
     def get(self, section, key, default=None):
         return self.config.get(section, key, fallback=default)
 
+    def getboolean(self, section, key, default=None):
+        return self.config.getboolean(section, key, fallback=default)
+
+    def getint(self, section, key, default=None):
+        return self.config.getint(section, key, fallback=default)
+
     def set_dict(self, cdict):
         for section, c in cdict.items():
             if section not in self.config.sections():

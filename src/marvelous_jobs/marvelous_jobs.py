@@ -7,6 +7,7 @@ import sys
 
 import marvelous_jobs as mj
 from marvelous_jobs import marvelous_config as mc
+from marvelous_jobs import daligner_job
 
 import marvel
 
@@ -24,7 +25,7 @@ def init(name, coverage, directory='.', force=False):
     mj.marvel_db(filename=db_name, name=name,
                  coverage=coverage, force=force)
 
-def prepare(fasta, blocksize, force=False):
+def prepare(fasta, blocksize, directory, force=False):
     db_name = os.path.join('.', 'marveldb')
     db = mj.marvel_db.from_file(db_name)
     if db.is_prepared() and not force:
@@ -32,11 +33,16 @@ def prepare(fasta, blocksize, force=False):
         exit(1)
     projname = db.info('name')
 
+    if not os.path.exists(directory):
+        os.mkdir(directory)
+
     config = mc(os.path.join('.', '{0}_config.ini'.format(projname)))
     config.set('general', 'blocksize', blocksize)
+    config.set('general', 'script_directory', directory)
     config.set('daligner', 'verbose', True)
     config.set('daligner', 'identity', True)
     config.set('daligner', 'tuple_suppression_frequency', 20)
+    config.set('daligner', 'correlation_rate', 0.7)
     config.set('daligner', 'threads', 4)
 
     args = [
@@ -63,12 +69,17 @@ def prepare(fasta, blocksize, force=False):
         db.remove_jobs()
 
     for i in range(1, n_blocks + 1):
-        db.add_block(i, '{0}.{1}'.format(projname, i))
+        block_name = '{0}.{1}'.format(projname, i)
+        db.add_block(i, block_name)
         db.add_job(i, i, 1)
+        job = daligner_job(block_name, block_name, config)
 
     for i in range(1, n_blocks + 1):
         for j in range(i + 1, n_blocks + 1):
             db.add_job(i, j, i + 1)
+            job = daligner_job('{0}.{1}'.format(projname, i),
+                               '{0}.{1}'.format(projname, j),
+                               config)
 
     db.prepare(force=force)
 
@@ -118,6 +129,9 @@ def parse_args():
                              dest='blocksize')
     prep_parser.add_argument('-f', '--force', help='force prepare',
                              action='store_true')
+    prep_parser.add_argument('-d', '--directory', help='directory where to '
+                             'store scripts (default: scripts)',
+                             default=os.path.join('.', 'scripts'))
 
     args = parser.parse_args()
 
@@ -144,7 +158,8 @@ def main():
         init(directory=args.directory, name=args.name,
              coverage=args.coverage, force=args.force)
     if args.subcommand == 'prepare':
-        prepare(fasta=args.fasta, blocksize=args.blocksize, force=args.force)
+        prepare(fasta=args.fasta, blocksize=args.blocksize,
+                directory=args.directory, force=args.force)
     if args.subcommand == 'info':
         info()
 
