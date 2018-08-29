@@ -10,7 +10,7 @@ class marvelous_config:
             self.config.read(filename)
         else:
             self.config.add_section('general')
-            self.config.add_section('dalign')
+            self.config.add_section('daligner')
 
         if cdict is not None:
             self.set_dict(cdict)
