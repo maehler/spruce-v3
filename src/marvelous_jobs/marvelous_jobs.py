@@ -31,7 +31,7 @@ def prepare(fasta, blocksize, force=False):
         exit(1)
     projname = db.info('name')
     args = [
-        'DBprepare.py',
+        os.path.join(marvel.config.PATH_SCRIPTS, 'DBprepare.py'),
         '--blocksize', str(blocksize),
         projname,
         fasta
