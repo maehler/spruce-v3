@@ -93,6 +93,18 @@ class marvel_db:
                         WHERE status = 'notstarted' ''')
         return self._c.fetchone()[0]
 
+    def n_jobs_running(self):
+        self._c.execute('''SELECT COUNT(block_id1)
+                        FROM job
+                        WHERE status = 'running' ''')
+        return self._c.fetchone()[0]
+
+    def n_jobs_finished(self):
+        self._c.execute('''SELECT COUNT(block_id1)
+                        FROM job
+                        WHERE status = 'finished' ''')
+        return self._c.fetchone()[0]
+
     def info(self, key=None):
         self._c.execute('''SELECT name, coverage, started_on, prepared_on FROM project''')
         res = self._c.fetchone()
@@ -103,6 +115,8 @@ class marvel_db:
                     'prepared on': res[3],
                     'blocks': self.n_blocks(),
                     'jobs': self.n_jobs(),
+                    'jobs running': self.n_jobs_running(),
+                    'jobs finished': self.n_jobs_finished(),
                     'jobs not started': self.n_jobs_not_started()}
         else:
             if key not in res.keys():
