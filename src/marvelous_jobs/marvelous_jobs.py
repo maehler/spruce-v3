@@ -26,6 +26,9 @@ def init(name, coverage, directory='.', force=False):
 def prepare(fasta, blocksize):
     db_name = os.path.join('.', 'marveldb')
     db = mj.marvel_db.from_file(db_name)
+    if db.is_prepared():
+        print('error: database is already prepared', file=sys.stderr)
+        exit(1)
     projname = db.info('name')
     args = [
         'DBprepare.py',
@@ -48,14 +51,18 @@ def prepare(fasta, blocksize):
 
     for i in range(1, n_blocks + 1):
         db.add_block(i, '{0}.{1}'.format(projname, i))
+        db.add_job(i, i)
+
+    db.prepare()
 
 def info():
     db_name = os.path.join('.', 'marveldb')
     db = mj.marvel_db.from_file(db_name)
     project_info = db.info()
     print('MARVEL project started on {0}'.format(project_info['started on']))
+    widest = max(map(len, db.info().keys()))
     for k, v in db.info().items():
-        print('{0:>11}: {1}'.format(k, v))
+        print('{0:>{widest}}: {1}'.format(k, v, widest=widest))
 
 # Helper functions for the argument parsing
 def directory_exists(s):
