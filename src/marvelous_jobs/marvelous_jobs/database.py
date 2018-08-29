@@ -47,6 +47,14 @@ class marvel_db:
         name, coverage = c.fetchone()
         return cls(filename, name, coverage, False)
 
+    def remove_blocks(self):
+        self._c.execute('DELETE FROM block')
+        self._db.commit()
+
+    def remove_jobs(self):
+        self._c.execute('DELETE FROM job')
+        self._db.commit()
+
     def add_block(self, id, name):
         self._c.execute('''INSERT INTO block
                             (id, name)
@@ -63,8 +71,8 @@ class marvel_db:
         self._c.execute('SELECT prepared_on FROM project')
         return self._c.fetchone()[0] is not None
 
-    def prepare(self):
-        if not self.is_prepared():
+    def prepare(self, force=False):
+        if not self.is_prepared() or force:
             self._c.execute('''UPDATE project
                             SET prepared_on = datetime('now')''')
             self._db.commit()
@@ -86,10 +94,13 @@ class marvel_db:
         return self._c.fetchone()[0]
 
     def info(self, key=None):
-        self._c.execute('''SELECT name, coverage, started_on FROM project''')
+        self._c.execute('''SELECT name, coverage, started_on, prepared_on FROM project''')
         res = self._c.fetchone()
         if key is None:
-            return {'name': res[0], 'coverage': res[1], 'started on': res[2],
+            return {'name': res[0],
+                    'coverage': res[1],
+                    'started on': res[2],
+                    'prepared on': res[3],
                     'blocks': self.n_blocks(),
                     'jobs': self.n_jobs(),
                     'jobs not started': self.n_jobs_not_started()}

@@ -23,10 +23,10 @@ def init(name, coverage, directory='.', force=False):
     mj.marvel_db(filename=db_name, name=name,
                  coverage=coverage, force=force)
 
-def prepare(fasta, blocksize):
+def prepare(fasta, blocksize, force=False):
     db_name = os.path.join('.', 'marveldb')
     db = mj.marvel_db.from_file(db_name)
-    if db.is_prepared():
+    if db.is_prepared() and not force:
         print('error: database is already prepared', file=sys.stderr)
         exit(1)
     projname = db.info('name')
@@ -49,11 +49,15 @@ def prepare(fasta, blocksize):
             if line.strip().startswith('blocks'):
                 n_blocks = int(line.strip().split()[-1])
 
+    if force:
+        db.remove_blocks()
+        db.remove_jobs()
+
     for i in range(1, n_blocks + 1):
         db.add_block(i, '{0}.{1}'.format(projname, i))
         db.add_job(i, i)
 
-    db.prepare()
+    db.prepare(force=force)
 
 def info():
     db_name = os.path.join('.', 'marveldb')
@@ -94,11 +98,13 @@ def parse_args():
 
     # DBprepare
     prep_parser = subparsers.add_parser('prepare', help='Prepare data files')
-    prep_parser.add_argument('fasta', help='Input reads in FASTA format')
+    prep_parser.add_argument('fasta', help='input reads in FASTA format')
     prep_parser.add_argument('-s', '--blocksize',
-                             help='Database block size in megabases (default: 200)',
+                             help='database block size in megabases (default: 200)',
                              default=200, type=int, metavar='N',
                              dest='blocksize')
+    prep_parser.add_argument('-f', '--force', help='force prepare',
+                             action='store_true')
 
     args = parser.parse_args()
 
@@ -125,7 +131,7 @@ def main():
         init(directory=args.directory, name=args.name,
              coverage=args.coverage, force=args.force)
     if args.subcommand == 'prepare':
-        prepare(fasta=args.fasta, blocksize=args.blocksize)
+        prepare(fasta=args.fasta, blocksize=args.blocksize, force=args.force)
     if args.subcommand == 'info':
         info()
 
