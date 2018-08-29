@@ -6,6 +6,7 @@ from subprocess import Popen, PIPE
 import sys
 
 import marvelous_jobs as mj
+from marvelous_jobs import marvelous_config as mc
 
 import marvel
 
@@ -30,6 +31,8 @@ def prepare(fasta, blocksize, force=False):
         print('error: database is already prepared', file=sys.stderr)
         exit(1)
     projname = db.info('name')
+    config = mc(os.path.join('.', '{0}_config.ini'.format(projname)))
+    config.set('general', 'blocksize', blocksize)
     args = [
         os.path.join(marvel.config.PATH_SCRIPTS, 'DBprepare.py'),
         '--blocksize', str(blocksize),
