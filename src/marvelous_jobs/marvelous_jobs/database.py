@@ -29,6 +29,7 @@ class marvel_db:
                                 (block_id1 INT NOT NULL,
                                  block_id2 INT NOT NULL,
                                  status TEXT NOT NULL DEFAULT 'notstarted',
+                                 jobid INT,
                                  last_update TEXT,
                                  PRIMARY KEY(block_id1, block_id2),
                                  FOREIGN KEY(block_id1) REFERENCES block(id),
