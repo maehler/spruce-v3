@@ -28,6 +28,7 @@ class marvel_db:
             self._c.execute('''CREATE TABLE job
                                 (block_id1 INT NOT NULL,
                                  block_id2 INT NOT NULL,
+                                 priority INT NOT NULL,
                                  status TEXT NOT NULL DEFAULT 'notstarted',
                                  jobid INT,
                                  last_update TEXT,
@@ -62,10 +63,10 @@ class marvel_db:
                             VALUES (?, ?)''', (id, name))
         self._db.commit()
 
-    def add_job(self, id1, id2):
+    def add_job(self, id1, id2, priority):
         self._c.execute('''INSERT INTO job
-                        (block_id1, block_id2, last_update)
-                        VALUES (?, ?, datetime('now'))''', (id1, id2))
+                        (block_id1, block_id2, priority, last_update)
+                        VALUES (?, ?, ?, datetime('now'))''', (id1, id2, priority))
         self._db.commit()
 
     def is_prepared(self):

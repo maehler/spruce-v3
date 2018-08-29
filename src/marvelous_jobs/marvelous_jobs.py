@@ -58,11 +58,11 @@ def prepare(fasta, blocksize, force=False):
 
     for i in range(1, n_blocks + 1):
         db.add_block(i, '{0}.{1}'.format(projname, i))
-        db.add_job(i, i)
+        db.add_job(i, i, 1)
 
     for i in range(1, n_blocks + 1):
         for j in range(i + 1, n_blocks + 1):
-            db.add_job(i, j)
+            db.add_job(i, j, i + 1)
 
     db.prepare(force=force)
 
