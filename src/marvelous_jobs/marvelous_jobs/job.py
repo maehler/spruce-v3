@@ -17,7 +17,12 @@ class marvel_job:
         pass
 
     def __str__(self):
-        return self.commandline()
+        cmd_lines = ['#!/bin/bash -l',
+                     'set -eu',
+                     '#SBATCH -A {0}'.format(self.account) \
+                        if self.account is not None else '',
+                     self.commandline()]
+        return '\n'.join([x for x in cmd_lines if len(x) > 0])
 
 class daligner_job(marvel_job):
 
