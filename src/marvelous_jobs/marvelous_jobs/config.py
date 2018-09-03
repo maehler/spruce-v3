@@ -3,11 +3,15 @@ import os
 
 class marvelous_config:
 
-    def __init__(self, filename, cdict=None):
+    def __init__(self, filename=None, cdict=None):
         self.config = SafeConfigParser()
-        self.filename = filename
-        if os.path.isfile(filename):
-            self.config.read(filename)
+        if filename is not None:
+            self.filename = filename
+        else:
+            self.filename = os.path.join('.', 'config.ini')
+
+        if os.path.isfile(self.filename):
+            self.config.read(self.filename)
         else:
             self.config.add_section('general')
             self.config.add_section('daligner')

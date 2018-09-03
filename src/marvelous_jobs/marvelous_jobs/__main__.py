@@ -40,7 +40,7 @@ def prepare(fasta, blocksize, directory, force=False):
     if not os.path.exists(directory):
         os.mkdir(directory)
 
-    config = mc(os.path.join('.', '{0}_config.ini'.format(projname)))
+    config = mc()
     config.set('general', 'blocksize', blocksize)
     config.set('general', 'script_directory', directory)
     config.set('daligner', 'verbose', True)
