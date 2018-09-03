@@ -26,6 +26,10 @@ def init(name, coverage, directory='.', force=False):
                  coverage=coverage, force=force)
 
 def prepare(fasta, blocksize, directory, force=False):
+    if not is_project():
+        print('error: no project found in current directory, '
+              'did you run init?', file=sys.stderr)
+        sys.exit(1)
     db_name = os.path.join('.', 'marveldb')
     db = mj.marvel_db.from_file(db_name)
     if db.is_prepared() and not force:
@@ -84,6 +88,10 @@ def prepare(fasta, blocksize, directory, force=False):
     db.prepare(force=force)
 
 def info():
+    if not is_project():
+        print('error: no project found in current directory, '
+              'did you run init?', file=sys.stderr)
+        sys.exit(1)
     db_name = os.path.join('.', 'marveldb')
     db = mj.marvel_db.from_file(db_name)
     project_info = db.info()
