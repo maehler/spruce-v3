@@ -15,7 +15,7 @@ def is_project(directory='.'):
     db_name = os.path.abspath(os.path.join(directory, 'marveldb'))
     return os.path.exists(db_name)
 
-def init(name, coverage, directory='.', force=False):
+def init(name, coverage, account=None, directory='.', force=False):
     if is_project(directory) and not force:
         print('error: project is already initialised, delete '
               '`marveldb` or use --force if you want to start over',
@@ -24,6 +24,17 @@ def init(name, coverage, directory='.', force=False):
     db_name = os.path.join(directory, 'marveldb')
     mj.marvel_db(filename=db_name, name=name,
                  coverage=coverage, force=force)
+
+    config = mc(cdict={
+        'general': {'account': account},
+        'daligner': {
+            'verbose': True,
+            'identity': True,
+            'tuple_suppression_frequency': 20,
+            'correlation_rate': 0.7,
+            'threads': 4
+        }
+    })
 
 def prepare(fasta, blocksize, directory, force=False):
     if not is_project():
@@ -43,11 +54,6 @@ def prepare(fasta, blocksize, directory, force=False):
     config = mc()
     config.set('general', 'blocksize', blocksize)
     config.set('general', 'script_directory', directory)
-    config.set('daligner', 'verbose', True)
-    config.set('daligner', 'identity', True)
-    config.set('daligner', 'tuple_suppression_frequency', 20)
-    config.set('daligner', 'correlation_rate', 0.7)
-    config.set('daligner', 'threads', 4)
 
     args = [
         os.path.join(marvel.config.PATH_SCRIPTS, 'DBprepare.py'),
@@ -116,6 +122,8 @@ def parse_args():
     # Initialisation
     init_parser = subparsers.add_parser('init', help='Initialise a new project')
     init_parser.add_argument('name', help='name of the project')
+    init_parser.add_argument('-A', '--account', help='SLURM account where '
+                             'jobs should be run')
     init_parser.add_argument('-x', '--coverage', help='sequencing coverage of'
                              ' the project (default: 30)', default=30,
                              type=int)
@@ -164,6 +172,7 @@ def main():
 
     if args.subcommand == 'init':
         init(directory=args.directory, name=args.name,
+             account=args.account,
              coverage=args.coverage, force=args.force)
     if args.subcommand == 'prepare':
         prepare(fasta=args.fasta, blocksize=args.blocksize,

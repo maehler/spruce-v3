@@ -4,10 +4,11 @@ import marvel
 
 class marvel_job:
 
-    def __init__(self, executable, jobname, args):
+    def __init__(self, executable, jobname, args, config):
         self.executable = executable
         self.args = args
         self.jobname = jobname
+        self.account = config.get('general', 'account')
 
     def commandline(self):
         return ' '.join([self.executable] + self.args)
@@ -31,5 +32,5 @@ class daligner_job(marvel_job):
             block1, block2
         ]
         super().__init__(os.path.join(marvel.config.PATH_BIN, 'daligner'),
-                         jobname, args)
+                         jobname, args, config)
 
