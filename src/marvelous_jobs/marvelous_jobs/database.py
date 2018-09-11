@@ -1,6 +1,8 @@
 import os
 import sqlite3
 
+from marvelous_jobs import slurm_utils
+
 class marvel_db:
 
     def __init__(self, filename, name, coverage, force=False):
@@ -87,6 +89,26 @@ class marvel_db:
                         (node, ip, last_update)
                         VALUES (?, ?, datetime('now'))''', (job.node, job.ip))
         self._db.commit()
+
+    def update_masking_job_id(self, jobid):
+        self._c.execute('UPDATE masking_job SET jobid = ?', (jobid,))
+        self._db.commit()
+        self.update_masking_job_status()
+
+    def update_masking_job_status(self):
+        self._c.execute('SELECT jobid FROM masking_job')
+        jobid = self._c.fetchone()[0]
+
+        job_status = slurm_utils.get_job_status(jobid)
+        self._c.execute('''UPDATE masking_job
+                        SET status = ?, last_update = datetime('now')''',
+                        (job_status,))
+
+        self._db.commit()
+
+    def masking_status(self):
+        self._c.execute('SELECT jobid, status, last_update FROM masking_job')
+        return self._c.fetchone()
 
     def is_prepared(self):
         self._c.execute('SELECT prepared_on FROM project')

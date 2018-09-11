@@ -11,3 +11,9 @@ def is_node(n):
 
 def get_node_ip(n):
     return socket.gethostbyname(n)
+
+def get_job_status(jobid):
+    try:
+        return pyslurm.job().find_id(str(jobid))[0]['job_state']
+    except ValueError:
+        raise

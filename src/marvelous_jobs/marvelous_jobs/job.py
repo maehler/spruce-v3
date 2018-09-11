@@ -1,4 +1,5 @@
 import os
+from subprocess import Popen, PIPE
 
 import marvel
 from marvelous_jobs import slurm_utils
@@ -22,7 +23,14 @@ class marvel_job:
             f.write(str(self))
 
     def start(self):
-        pass
+        if not os.path.isfile(self.filename):
+            self.save_script()
+        p = Popen(['sbatch', self.filename], shell=False,
+                  stdout=PIPE, stderr=PIPE)
+        output = p.communicate()
+        if len(output[1].strip()) > 0:
+            raise RuntimeError(output[1].decode('utf-8'))
+        return int(output[0].strip().split()[-1])
 
     def __str__(self):
         cmd_lines = ['#!/bin/bash -l',

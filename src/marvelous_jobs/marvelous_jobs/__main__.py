@@ -108,6 +108,24 @@ def start_mask(node=None, threads=4, port=12345):
     db.add_masking_job(job)
     job.save_script()
 
+    try:
+        jobid = job.start()
+    except RuntimeError as rte:
+        print('error: failed to start masking server', file=sys.stderr)
+        print(rte, file=sys.stderr)
+        return
+
+    db.update_masking_job_id(jobid=jobid)
+
+def mask_status():
+    db_name = os.path.join('.', 'marveldb')
+    db = mj.marvel_db.from_file(db_name)
+    masking_status = db.masking_status()
+    if masking_status is None:
+        print('No masking server initialised, did you run mask start?')
+    else:
+        print('Job {0}: {1}, last update on {2}'.format(masking_status))
+
 def info():
     if not is_project():
         print('error: no project found in current directory, '
@@ -225,6 +243,8 @@ def main():
                 directory=args.directory, force=args.force)
     if args.subcommand == 'mask' and args.subsubcommand == 'start':
         start_mask(args.node, args.threads, args.port)
+    if args.subcommand == 'mask' and args.subsubcommand == 'status':
+        mask_status()
     if args.subcommand == 'info':
         info()
 
