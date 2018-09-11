@@ -22,7 +22,10 @@ class marvelous_config:
         self.save()
 
     def get(self, section, key, default=None):
-        return self.config.get(section, key, fallback=default)
+        value = self.config.get(section, key, fallback=default)
+        if value == 'None':
+            return None
+        return value
 
     def getboolean(self, section, key, default=None):
         return self.config.getboolean(section, key, fallback=default)
@@ -33,7 +36,7 @@ class marvelous_config:
     def set_dict(self, cdict):
         for section, c in cdict.items():
             if section not in self.config.sections():
-                self.config.add_section()
+                self.config.add_section(section)
             for key, value in c.items():
                 self.config.set(section, key, str(value))
 

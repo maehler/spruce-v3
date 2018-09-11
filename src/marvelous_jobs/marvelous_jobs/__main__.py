@@ -7,7 +7,8 @@ import sys
 
 import marvelous_jobs as mj
 from marvelous_jobs import marvelous_config as mc
-from marvelous_jobs import daligner_job
+from marvelous_jobs import daligner_job, masking_server_job
+from marvelous_jobs import slurm_utils
 
 import marvel
 
@@ -32,7 +33,13 @@ def init(name, coverage, account=None, directory='.', force=False):
             'identity': True,
             'tuple_suppression_frequency': 20,
             'correlation_rate': 0.7,
-            'threads': 4
+            'threads': 4,
+            'timelimit': '1-00:00:00'
+        },
+        'DMserver': {
+            'threads': 4,
+            'port': 12345,
+            'timelimit': '10-00:00:00'
         }
     })
 
@@ -93,6 +100,14 @@ def prepare(fasta, blocksize, directory, force=False):
 
     db.prepare(force=force)
 
+def start_mask(node=None, threads=4, port=12345):
+    config = mc()
+    db_name = os.path.join('.', 'marveldb')
+    db = mj.marvel_db.from_file(db_name)
+    job = masking_server_job(node, config)
+    db.add_masking_job(job)
+    job.save_script()
+
 def info():
     if not is_project():
         print('error: no project found in current directory, '
@@ -149,8 +164,31 @@ def parse_args():
                              'store scripts (default: scripts)',
                              default=os.path.join('.', 'scripts'))
 
+    # Masking server
+    mask_parser = subparsers.add_parser('mask', help='Masking server')
+    mask_subparsers = mask_parser.add_subparsers(title='masking command',
+                                                 dest='subsubcommand')
+
+    # Masking server status
+    mask_status = mask_subparsers.add_parser('status', help='masking server '
+                                             'status')
+
+    # Start masking server
+    mask_start = mask_subparsers.add_parser('start', help='start masking server')
+    mask_start.add_argument('-w', '--node', help='node where to run the '
+                            'process', required=True)
+    mask_start.add_argument('-t', '--threads', help='number of worker threads '
+                            '(default: 4)',
+                            type=int, default=4)
+    mask_start.add_argument('-p', '--port', help='port to listen to (default: '
+                            '12345)', type=int, default=12345)
+
+    # Stop masking server
+    mask_stop = mask_subparsers.add_parser('stop', help='stop masking server')
+
     args = parser.parse_args()
 
+    # Argument validation
     if args.subcommand == 'init':
         args.directory = os.path.abspath(args.directory)
         if not directory_exists(args.directory):
@@ -161,6 +199,14 @@ def parse_args():
     if args.subcommand == 'prepare':
         if not positive_integer(args.blocksize):
             parser.error('blocksize must be a positive non-zero integer')
+
+    if args.subcommand == 'mask' and args.subsubcommand == 'start':
+        if not positive_integer(args.threads):
+            parser.error('number of threads must be a positive non-zero integer')
+        if not positive_integer(args.port):
+            parser.error('port must be a positive non-zero integer')
+        if args.node is not None and not slurm_utils.is_node(args.node):
+            parser.error('{0} is not a valid node'.format(args.node))
 
     if args.subcommand is None:
         parser.parse_args(['-h'])
@@ -177,6 +223,8 @@ def main():
     if args.subcommand == 'prepare':
         prepare(fasta=args.fasta, blocksize=args.blocksize,
                 directory=args.directory, force=args.force)
+    if args.subcommand == 'mask' and args.subsubcommand == 'start':
+        start_mask(args.node, args.threads, args.port)
     if args.subcommand == 'info':
         info()
 

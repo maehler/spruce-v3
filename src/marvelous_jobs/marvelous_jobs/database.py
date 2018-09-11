@@ -10,7 +10,8 @@ class marvel_db:
         self._c = self._db.cursor()
 
         if force:
-            self._c.execute('DROP TABLE IF EXISTS job')
+            self._c.execute('DROP TABLE IF EXISTS daligner_job')
+            self._c.execute('DROP TABLE IF EXISTS masking_job')
             self._c.execute('DROP TABLE IF EXISTS block')
             self._c.execute('DROP TABLE IF EXISTS project')
 
@@ -35,6 +36,13 @@ class marvel_db:
                                  PRIMARY KEY(block_id1, block_id2),
                                  FOREIGN KEY(block_id1) REFERENCES block(id),
                                  FOREIGN KEY(block_id2) REFERENCES block(id))''')
+            self._c.execute('''CREATE TABLE masking_job
+                                (node TEXT,
+                                 ip TEXT,
+                                 status TEXT NOT NULL DEFAULT 'notstarted',
+                                 jobid INT,
+                                 last_update TEXT,
+                                 PRIMARY KEY(jobid))''')
 
             self._c.execute('''INSERT INTO project
                                 (name, coverage, started_on)
@@ -67,6 +75,17 @@ class marvel_db:
         self._c.execute('''INSERT INTO daligner_job
                         (block_id1, block_id2, priority, last_update)
                         VALUES (?, ?, ?, datetime('now'))''', (id1, id2, priority))
+        self._db.commit()
+
+    def add_masking_job(self, job):
+        self._c.execute('''SELECT COUNT(node) FROM masking_job''')
+        n = self._c.fetchone()[0]
+
+        if n > 0:
+            self._c.execute('DELETE FROM masking_job')
+        self._c.execute('''INSERT INTO masking_job
+                        (node, ip, last_update)
+                        VALUES (?, ?, datetime('now'))''', (job.node, job.ip))
         self._db.commit()
 
     def is_prepared(self):
