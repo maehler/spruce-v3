@@ -76,17 +76,17 @@ def prepare(fasta, blocksize, directory, force=False):
 
     if force:
         db.remove_blocks()
-        db.remove_jobs()
+        db.remove_daligner_jobs()
 
     for i in range(1, n_blocks + 1):
         block_name = '{0}.{1}'.format(projname, i)
         db.add_block(i, block_name)
-        db.add_job(i, i, 1)
+        db.add_daligner_job(i, i, 1)
         job = daligner_job(block_name, block_name, config)
 
     for i in range(1, n_blocks + 1):
         for j in range(i + 1, n_blocks + 1):
-            db.add_job(i, j, i + 1)
+            db.add_daligner_job(i, j, i + 1)
             job = daligner_job('{0}.{1}'.format(projname, i),
                                '{0}.{1}'.format(projname, j),
                                config)

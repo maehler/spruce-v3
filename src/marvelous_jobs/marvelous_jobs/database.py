@@ -25,7 +25,7 @@ class marvel_db:
                                 id INT PRIMARY KEY NOT NULL,
                                 name TEXT NOT NULL
                                )''')
-            self._c.execute('''CREATE TABLE job
+            self._c.execute('''CREATE TABLE daligner_job
                                 (block_id1 INT NOT NULL,
                                  block_id2 INT NOT NULL,
                                  priority INT NOT NULL,
@@ -53,8 +53,8 @@ class marvel_db:
         self._c.execute('DELETE FROM block')
         self._db.commit()
 
-    def remove_jobs(self):
-        self._c.execute('DELETE FROM job')
+    def remove_daligner_jobs(self):
+        self._c.execute('DELETE FROM daligner_job')
         self._db.commit()
 
     def add_block(self, id, name):
@@ -63,8 +63,8 @@ class marvel_db:
                             VALUES (?, ?)''', (id, name))
         self._db.commit()
 
-    def add_job(self, id1, id2, priority):
-        self._c.execute('''INSERT INTO job
+    def add_daligner_job(self, id1, id2, priority):
+        self._c.execute('''INSERT INTO daligner_job
                         (block_id1, block_id2, priority, last_update)
                         VALUES (?, ?, ?, datetime('now'))''', (id1, id2, priority))
         self._db.commit()
@@ -85,25 +85,25 @@ class marvel_db:
         self._c.execute('SELECT COUNT(id) FROM block')
         return self._c.fetchone()[0]
 
-    def n_jobs(self):
-        self._c.execute('SELECT COUNT(block_id1) FROM job')
+    def n_daligner_jobs(self):
+        self._c.execute('SELECT COUNT(block_id1) FROM daligner_job')
         return self._c.fetchone()[0]
 
-    def n_jobs_not_started(self):
+    def n_daligner_jobs_not_started(self):
         self._c.execute('''SELECT COUNT(block_id1)
-                        FROM job
+                        FROM daligner_job
                         WHERE status = 'notstarted' ''')
         return self._c.fetchone()[0]
 
-    def n_jobs_running(self):
+    def n_daligner_jobs_running(self):
         self._c.execute('''SELECT COUNT(block_id1)
-                        FROM job
+                        FROM daligner_job
                         WHERE status = 'running' ''')
         return self._c.fetchone()[0]
 
-    def n_jobs_finished(self):
+    def n_daligner_jobs_finished(self):
         self._c.execute('''SELECT COUNT(block_id1)
-                        FROM job
+                        FROM daligner_job
                         WHERE status = 'finished' ''')
         return self._c.fetchone()[0]
 
@@ -116,10 +116,10 @@ class marvel_db:
                     'started on': res[2],
                     'prepared on': res[3],
                     'blocks': self.n_blocks(),
-                    'jobs': self.n_jobs(),
-                    'jobs running': self.n_jobs_running(),
-                    'jobs finished': self.n_jobs_finished(),
-                    'jobs not started': self.n_jobs_not_started()}
+                    'daligner jobs': self.n_daligner_jobs(),
+                    'daligner jobs running': self.n_daligner_jobs_running(),
+                    'daligner jobs finished': self.n_daligner_jobs_finished(),
+                    'daligner jobs not started': self.n_daligner_jobs_not_started()}
         else:
             if key not in res.keys():
                 raise KeyError('"{0}" not a valid key'.format(key))
