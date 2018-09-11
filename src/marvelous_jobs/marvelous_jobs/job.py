@@ -26,13 +26,13 @@ class marvel_job:
 
     def __str__(self):
         cmd_lines = ['#!/bin/bash -l',
-                     'set -eu',
                      '#SBATCH -A {0}'.format(self.account) \
                         if self.account is not None else '',
                      '#SBATCH -w {0}'.format(self.sbatch_args.get('node')) \
                         if self.sbatch_args.get('node') is not None else '',
                      '#SBATCH -t {0}'.format(self.sbatch_args.get('timelimit')) \
                         if self.sbatch_args.get('timelimit') is not None else '',
+                     'set -eu',
                      self.commandline()]
         return '\n'.join([x for x in cmd_lines if len(x) > 0])+'\n'
 
