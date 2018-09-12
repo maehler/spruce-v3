@@ -1,6 +1,16 @@
 import pyslurm
 import socket
 
+class status:
+    pending = 'PENDING'
+    running = 'RUNNING'
+    completed = 'COMPLETED'
+    completing = 'COMPLETING'
+    failed = 'FAILED'
+    notstarted = 'NOTSTARTED' # not a slurm job state
+    timeout = 'TIMEOUT'
+    cancelled = 'CANCELLED'
+
 def is_node(n):
     try:
         pyslurm.node().find_id(n)

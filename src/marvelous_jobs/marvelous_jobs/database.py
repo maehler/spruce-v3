@@ -32,7 +32,7 @@ class marvel_db:
                                 (block_id1 INT NOT NULL,
                                  block_id2 INT NOT NULL,
                                  priority INT NOT NULL,
-                                 status TEXT NOT NULL DEFAULT 'notstarted',
+                                 status TEXT NOT NULL DEFAULT 'NOTSTARTED',
                                  jobid INT,
                                  last_update TEXT,
                                  PRIMARY KEY(block_id1, block_id2),
@@ -41,7 +41,7 @@ class marvel_db:
             self._c.execute('''CREATE TABLE masking_job
                                 (node TEXT,
                                  ip TEXT,
-                                 status TEXT NOT NULL DEFAULT 'notstarted',
+                                 status TEXT NOT NULL DEFAULT 'NOTSTARTED',
                                  jobid INT,
                                  last_update TEXT,
                                  PRIMARY KEY(jobid))''')
@@ -99,7 +99,10 @@ class marvel_db:
         self._c.execute('SELECT jobid FROM masking_job')
         jobid = self._c.fetchone()[0]
 
-        job_status = slurm_utils.get_job_status(jobid)
+        try:
+            job_status = slurm_utils.get_job_status(jobid)
+        except ValueError:
+            raise
         self._c.execute('''UPDATE masking_job
                         SET status = ?, last_update = datetime('now')''',
                         (job_status,))
@@ -109,6 +112,10 @@ class marvel_db:
     def masking_status(self):
         self._c.execute('SELECT jobid, status, last_update FROM masking_job')
         return self._c.fetchone()
+
+    def get_masking_node(self):
+        self._c.execute('SELECT node FROM masking_job')
+        return self._c.fetchone()[0]
 
     def is_prepared(self):
         self._c.execute('SELECT prepared_on FROM project')
@@ -133,19 +140,27 @@ class marvel_db:
     def n_daligner_jobs_not_started(self):
         self._c.execute('''SELECT COUNT(block_id1)
                         FROM daligner_job
-                        WHERE status = 'notstarted' ''')
+                        WHERE status = ?''', (slurm_utils.status.notstarted,))
         return self._c.fetchone()[0]
 
     def n_daligner_jobs_running(self):
         self._c.execute('''SELECT COUNT(block_id1)
                         FROM daligner_job
-                        WHERE status = 'running' ''')
+                        WHERE status = ?''', (slurm_utils.status.running,))
         return self._c.fetchone()[0]
 
     def n_daligner_jobs_finished(self):
         self._c.execute('''SELECT COUNT(block_id1)
                         FROM daligner_job
-                        WHERE status = 'finished' ''')
+                        WHERE status = ?''', (slurm_utils.status.completed,))
+        return self._c.fetchone()[0]
+
+    def get_project_name(self):
+        self._c.execute('SELECT name FROM project')
+        return self._c.fetchone()[0]
+
+    def get_coverage(self):
+        self._c.execute('SELECT coverage FROM project')
         return self._c.fetchone()[0]
 
     def info(self, key=None):

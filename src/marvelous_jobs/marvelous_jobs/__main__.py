@@ -104,7 +104,21 @@ def start_mask(node=None, threads=4, port=12345):
     config = mc()
     db_name = os.path.join('.', 'marveldb')
     db = mj.marvel_db.from_file(db_name)
-    job = masking_server_job(node, config)
+
+    masking_status = db.masking_status()
+
+    if masking_status is not None \
+       and masking_status[1] in (slurm_utils.status.running,
+                                 slurm_utils.status.pending,
+                                 slurm_utils.status.completing):
+        print('error: masking server already queued/running', file=sys.stderr)
+        sys.exit(1)
+
+    job = masking_server_job(db.get_project_name(),
+                             db.get_coverage(),
+                             node, config)
+    print(db.get_project_name(),
+          db.get_coverage())
     db.add_masking_job(job)
     job.save_script()
 
@@ -113,18 +127,55 @@ def start_mask(node=None, threads=4, port=12345):
     except RuntimeError as rte:
         print('error: failed to start masking server', file=sys.stderr)
         print(rte, file=sys.stderr)
-        return
+        sys.exit(1)
 
     db.update_masking_job_id(jobid=jobid)
+
+def stop_mask():
+    config = mc()
+    db_name = os.path.join('.', 'marveldb')
+    db = mj.marvel_db.from_file(db_name)
+
+    masking_status = db.masking_status()
+
+    if masking_status is None:
+        print('error: no masking server initialised', file=sys.stderr)
+        sys.exit(1)
+
+    if masking_status[1] not in (slurm_utils.status.running,
+                                 slurm_utils.status.pending):
+        print('error: masking server already stopped', file=sys.stderr)
+        sys.exit(1)
+
+    job = masking_server_job(db.get_project_name(),
+                             db.get_coverage(),
+                             db.get_masking_node(), config,
+                             jobid=masking_status[0])
+
+    if masking_status[1] == slurm_utils.status.running:
+        job.stop()
+
+    try:
+        job.cancel()
+    except RuntimeError as rte:
+        print('error: {0}'.format(rte), file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        db.update_masking_job_status()
+    except ValueError as ve:
+        print('error: {0}'.format(ve), file=sys.stderr)
+        sys.exit(1)
 
 def mask_status():
     db_name = os.path.join('.', 'marveldb')
     db = mj.marvel_db.from_file(db_name)
+    db.update_masking_job_status()
     masking_status = db.masking_status()
     if masking_status is None:
         print('No masking server initialised, did you run mask start?')
     else:
-        print('Job {0}: {1}, last update on {2}'.format(masking_status))
+        print('Job {0}: {1}, last update on {2}'.format(*masking_status))
 
 def info():
     if not is_project():
@@ -245,6 +296,8 @@ def main():
         start_mask(args.node, args.threads, args.port)
     if args.subcommand == 'mask' and args.subsubcommand == 'status':
         mask_status()
+    if args.subcommand == 'mask' and args.subsubcommand == 'stop':
+        stop_mask()
     if args.subcommand == 'info':
         info()
 
