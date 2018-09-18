@@ -89,7 +89,10 @@ def start_daligner(force=False, no_masking=False):
     db = get_database()
     update_statuses()
 
-    if not no_masking and not db.has_masking_job():
+    if not no_masking and \
+           (not db.has_masking_job() or \
+            db.masking_status()[1] not in (slurm_utils.status.running,
+                                           slurm_utils.status.pending)):
         print('error: no masking server job has been started, run mask start',
               file=sys.stderr)
         sys.exit(1)
@@ -127,15 +130,20 @@ def start_daligner(force=False, no_masking=False):
             print('error: {0}, use --force to override'.format(rte), file=sys.stderr)
             exit(1)
         db.add_daligner_job(i, i, 1)
-        job = daligner_job(block_name, block_name, mask_ip, config)
+        job = daligner_job(block_name, block_name, mask_ip, config,
+                           after=mask_jobid)
         job.save_script()
+        jobid = job.start()
 
     for i in range(1, n_blocks + 1):
         for j in range(i + 1, n_blocks + 1):
             db.add_daligner_job(i, j, i + 1)
             job = daligner_job('{0}.{1}'.format(projname, i),
                                '{0}.{1}'.format(projname, j),
-                               mask_ip, config)
+                               mask_ip, config,
+                               after=mask_jobid)
+            job.save_script()
+            jobid = job.start()
 
 def start_mask(node=None, threads=4, port=12345):
     config = mc()
@@ -153,8 +161,6 @@ def start_mask(node=None, threads=4, port=12345):
     job = masking_server_job(db.get_project_name(),
                              db.get_coverage(),
                              node, config)
-    print(db.get_project_name(),
-          db.get_coverage())
     db.add_masking_job(job)
     job.save_script()
 

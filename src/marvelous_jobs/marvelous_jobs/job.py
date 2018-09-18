@@ -19,7 +19,7 @@ class marvel_job:
                                     '{0}.log'.format(self.jobname))
 
     def commandline(self):
-        return ' '.join([self.executable] + self.args)
+        return ' '.join(x for x in [self.executable] + self.args if len(x) > 0)
 
     def save_script(self):
         with open(self.filename, 'w') as f:
@@ -51,6 +51,9 @@ class marvel_job:
                      '#SBATCH -t {0}'.format(self.sbatch_args.get('timelimit')) \
                         if self.sbatch_args.get('timelimit') is not None else '',
                      '#SBATCH -o {0}'.format(self.logfile),
+                     '#SBATCH --dependency after:{0}'\
+                        .format(self.sbatch_args.get('after')) \
+                        if self.sbatch_args.get('after') is not None else '',
                      'set -eu',
                      self.commandline()]
         return '\n'.join([x for x in cmd_lines if len(x) > 0])+'\n'
@@ -67,7 +70,7 @@ class prepare_job(marvel_job):
 
 class daligner_job(marvel_job):
 
-    def __init__(self, block1, block2, mask_ip, config):
+    def __init__(self, block1, block2, mask_ip, config, **kwargs):
         jobname = '{0}.{1}.dalign'.format(block1, block2)
         args = [
             '-v' if config.getboolean('daligner', 'verbose') else '',
@@ -82,7 +85,8 @@ class daligner_job(marvel_job):
         ]
         super().__init__(os.path.join(marvel.config.PATH_BIN, 'daligner'),
                          jobname, args, config,
-                         timelimit=config.get('daligner', 'timelimit'))
+                         timelimit=config.get('daligner', 'timelimit'),
+                         **kwargs)
 
 class masking_server_job(marvel_job):
 
