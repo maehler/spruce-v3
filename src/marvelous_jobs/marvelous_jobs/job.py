@@ -15,6 +15,8 @@ class marvel_job:
         self.account = config.get('general', 'account')
         self.filename = os.path.join(config.get('general', 'script_directory'),
                                      '{0}.sh'.format(self.jobname))
+        self.logfile = os.path.join(config.get('general', 'log_directory'),
+                                    '{0}.log'.format(self.jobname))
 
     def commandline(self):
         return ' '.join([self.executable] + self.args)

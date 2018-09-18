@@ -43,7 +43,7 @@ def init(name, coverage, account=None, directory='.', force=False):
         }
     })
 
-def prepare(fasta, blocksize, directory, force=False):
+def prepare(fasta, blocksize, script_directory, log_directory, force=False):
     if not is_project():
         print('error: no project found in current directory, '
               'did you run init?', file=sys.stderr)
@@ -55,12 +55,15 @@ def prepare(fasta, blocksize, directory, force=False):
         exit(1)
     projname = db.info('name')
 
-    if not os.path.exists(directory):
-        os.mkdir(directory)
+    if not os.path.exists(script_directory):
+        os.mkdir(script_directory)
+    if not os.path.exists(log_directory):
+        os.mkdir(log_directory)
 
     config = mc()
     config.set('general', 'blocksize', blocksize)
-    config.set('general', 'script_directory', directory)
+    config.set('general', 'script_directory', script_directory)
+    config.set('general', 'log_directory', log_directory)
 
     args = [
         os.path.join(marvel.config.PATH_SCRIPTS, 'DBprepare.py'),
@@ -229,9 +232,12 @@ def parse_args():
                              dest='blocksize')
     prep_parser.add_argument('-f', '--force', help='force prepare',
                              action='store_true')
-    prep_parser.add_argument('-d', '--directory', help='directory where to '
+    prep_parser.add_argument('-d', '--script-directory', help='directory where to '
                              'store scripts (default: scripts)',
                              default=os.path.join('.', 'scripts'))
+    prep_parser.add_argument('-l', '--log-directory', help='directory where to '
+                             'store log files (default: logs)',
+                             default=os.path.join('.', 'logs'))
 
     # Masking server
     mask_parser = subparsers.add_parser('mask', help='Masking server')
@@ -290,8 +296,11 @@ def main():
              account=args.account,
              coverage=args.coverage, force=args.force)
     if args.subcommand == 'prepare':
-        prepare(fasta=args.fasta, blocksize=args.blocksize,
-                directory=args.directory, force=args.force)
+        prepare(fasta=args.fasta,
+                blocksize=args.blocksize,
+                script_directory=args.script_directory,
+                log_directory=args.log_directory,
+                force=args.force)
     if args.subcommand == 'mask' and args.subsubcommand == 'start':
         start_mask(args.node, args.threads, args.port)
     if args.subcommand == 'mask' and args.subsubcommand == 'status':
