@@ -12,6 +12,7 @@ class marvel_db:
         self._c = self._db.cursor()
 
         if force:
+            self._c.execute('DROP TABLE IF EXISTS prepare_job')
             self._c.execute('DROP TABLE IF EXISTS daligner_job')
             self._c.execute('DROP TABLE IF EXISTS masking_job')
             self._c.execute('DROP TABLE IF EXISTS block')
@@ -45,10 +46,15 @@ class marvel_db:
                                  jobid INT,
                                  last_update TEXT,
                                  PRIMARY KEY(jobid))''')
+            self._c.execute('''CREATE TABLE prepare_job
+                                (jobid INT,
+                                 status TEXT NOT NULL DEFAULT 'NOTSTARTED',
+                                 last_update TEXT,
+                                 PRIMARY KEY (jobid))''')
 
             self._c.execute('''INSERT INTO project
                                 (name, coverage, started_on)
-                                VALUES (?, ?, datetime('now'))''', (name, coverage))
+                                VALUES (?, ?, datetime('now', 'localtime))''', (name, coverage))
             self._db.commit()
 
     @classmethod
@@ -68,26 +74,68 @@ class marvel_db:
         self._db.commit()
 
     def add_block(self, id, name):
-        self._c.execute('''INSERT INTO block
-                            (id, name)
-                            VALUES (?, ?)''', (id, name))
+        try:
+            self._c.execute('''INSERT INTO block
+                                (id, name)
+                                VALUES (?, ?)''', (id, name))
+        except sqlite3.IntegrityError:
+            raise RuntimeError('block already exists')
         self._db.commit()
 
     def add_daligner_job(self, id1, id2, priority):
         self._c.execute('''INSERT INTO daligner_job
                         (block_id1, block_id2, priority, last_update)
-                        VALUES (?, ?, ?, datetime('now'))''', (id1, id2, priority))
+                        VALUES (?, ?, ?, datetime('now', 'localtime'))''', (id1, id2, priority))
         self._db.commit()
 
-    def add_masking_job(self, job):
-        self._c.execute('''SELECT COUNT(node) FROM masking_job''')
-        n = self._c.fetchone()[0]
+    def add_prepare_job(self):
+        self._c.execute('''INSERT INTO prepare_job (last_update)
+                        VALUES (datetime('now', 'localtime'))''')
+        self._db.commit()
 
-        if n > 0:
+    def update_prepare_job_id(self, jobid):
+        self._c.execute('UPDATE prepare_job SET jobid = ?', (jobid,))
+        self._db.commit()
+        self.update_prepare_job_status()
+
+    def update_prepare_job_status(self):
+        self._c.execute('SELECT jobid FROM prepare_job')
+        res = self._c.fetchone()
+
+        if res is None:
+            return
+
+        jobid = res[0]
+
+        try:
+            job_status = slurm_utils.get_job_status(jobid)
+        except ValueError:
+            raise
+        self._c.execute('''UPDATE prepare_job
+                        SET status = ?, last_update = datetime('now',
+                        'localtime')''',
+                        (job_status,))
+        self._db.commit()
+
+    def prepare_status(self):
+        self._c.execute('SELECT status FROM prepare_job')
+        res = self._c.fetchone()
+
+        if res is None:
+            return res
+
+        return res[0]
+
+    def has_masking_job(self):
+        self._c.execute('SELECT COUNT(node) FROM masking_job')
+        return self._c.fetchone()[0] > 0
+
+    def add_masking_job(self, job):
+        if self.has_masking_job():
             self._c.execute('DELETE FROM masking_job')
         self._c.execute('''INSERT INTO masking_job
                         (node, ip, last_update)
-                        VALUES (?, ?, datetime('now'))''', (job.node, job.ip))
+                        VALUES (?, ?, datetime('now', 'localtime'))''', (job.node, job.ip))
         self._db.commit()
 
     def update_masking_job_id(self, jobid):
@@ -96,25 +144,47 @@ class marvel_db:
         self.update_masking_job_status()
 
     def update_masking_job_status(self):
+        if not self.has_masking_job():
+            return
+
         self._c.execute('SELECT jobid FROM masking_job')
-        jobid = self._c.fetchone()[0]
+        res = self._c.fetchone()
+
+        jobid = res[0]
 
         try:
             job_status = slurm_utils.get_job_status(jobid)
         except ValueError:
             raise
         self._c.execute('''UPDATE masking_job
-                        SET status = ?, last_update = datetime('now')''',
+                        SET status = ?, last_update = datetime('now',
+                        'localtime')''',
                         (job_status,))
 
         self._db.commit()
 
     def masking_status(self):
+        if not self.has_masking_job():
+            return None
         self._c.execute('SELECT jobid, status, last_update FROM masking_job')
         return self._c.fetchone()
 
     def get_masking_node(self):
+        if not self.has_masking_job():
+            return None
         self._c.execute('SELECT node FROM masking_job')
+        return self._c.fetchone()[0]
+
+    def get_masking_ip(self):
+        if not self.has_masking_job():
+            return None
+        self._c.execute('SELECT ip FROM masking_job')
+        return self._c.fetchone()[0]
+
+    def get_masking_jobid(self):
+        if not self.has_masking_job():
+            return None
+        self._c.execute('SELECT jobid FROM masking_job')
         return self._c.fetchone()[0]
 
     def is_prepared(self):
@@ -124,7 +194,7 @@ class marvel_db:
     def prepare(self, force=False):
         if not self.is_prepared() or force:
             self._c.execute('''UPDATE project
-                            SET prepared_on = datetime('now')''')
+                            SET prepared_on = datetime('now', 'localtime')''')
             self._db.commit()
         else:
             raise RuntimeError('database is already prepared')
@@ -170,7 +240,7 @@ class marvel_db:
             return {'name': res[0],
                     'coverage': res[1],
                     'started on': res[2],
-                    'prepared on': res[3],
+                    'prepared on': res[3] if res[3] is not None else 'Not prepared',
                     'blocks': self.n_blocks(),
                     'daligner jobs': self.n_daligner_jobs(),
                     'daligner jobs running': self.n_daligner_jobs_running(),

@@ -7,7 +7,7 @@ import sys
 
 import marvelous_jobs as mj
 from marvelous_jobs import marvelous_config as mc
-from marvelous_jobs import daligner_job, masking_server_job
+from marvelous_jobs import daligner_job, masking_server_job, prepare_job
 from marvelous_jobs import slurm_utils
 
 import marvel
@@ -15,6 +15,11 @@ import marvel
 def is_project(directory='.'):
     db_name = os.path.abspath(os.path.join(directory, 'marveldb'))
     return os.path.exists(db_name)
+
+def get_database():
+    db_name = os.path.join('.', 'marveldb')
+    db = mj.marvel_db.from_file(db_name)
+    return db
 
 def init(name, coverage, account=None, directory='.', force=False):
     if is_project(directory) and not force:
@@ -48,11 +53,19 @@ def prepare(fasta, blocksize, script_directory, log_directory, force=False):
         print('error: no project found in current directory, '
               'did you run init?', file=sys.stderr)
         sys.exit(1)
-    db_name = os.path.join('.', 'marveldb')
-    db = mj.marvel_db.from_file(db_name)
+
+    db = get_database()
+
     if db.is_prepared() and not force:
         print('error: database is already prepared', file=sys.stderr)
         exit(1)
+    elif not db.is_prepared() \
+            and db.prepare_status() in (slurm_utils.status.pending,
+                                        slurm_utils.status.completing):
+        print('error: database preparation already in progress',
+              file=sys.stderr)
+        exit(1)
+
     projname = db.info('name')
 
     if not os.path.exists(script_directory):
@@ -65,18 +78,33 @@ def prepare(fasta, blocksize, script_directory, log_directory, force=False):
     config.set('general', 'script_directory', script_directory)
     config.set('general', 'log_directory', log_directory)
 
-    args = [
-        os.path.join(marvel.config.PATH_SCRIPTS, 'DBprepare.py'),
-        '--blocksize', str(blocksize),
-        projname,
-        fasta
-    ]
-    p = Popen(args, shell=False)
-    p.wait()
+    db.add_prepare_job()
+    job = prepare_job(projname, fasta, config)
+    job.save_script()
+    jobid = job.start()
+    db.update_prepare_job_id(jobid)
 
-    if p.returncode != 0:
-        print('an error has occured in DBprepare.py', file=sys.stderr)
-        sys.exit(p.returncode)
+def start_daligner(force=False, no_masking=False):
+    config = mc()
+    db = get_database()
+    update_statuses()
+
+    if not no_masking and not db.has_masking_job():
+        print('error: no masking server job has been started, run mask start',
+              file=sys.stderr)
+        sys.exit(1)
+
+    if not db.is_prepared():
+        prepare_status = db.prepare_status()
+        if prepare_status is None:
+            print('error: database preparation has not been started, run '
+                  'prepare', file=sys.stderr)
+        else:
+            print('error: database preparation is not done yet, status is {0}'\
+                  .format(db.prepare_status()), file=sys.stderr)
+        exit(1)
+
+    projname = db.get_project_name()
 
     prepare_db_filename = '{0}.db'.format(projname)
     with open(prepare_db_filename) as f:
@@ -84,29 +112,34 @@ def prepare(fasta, blocksize, script_directory, log_directory, force=False):
             if line.strip().startswith('blocks'):
                 n_blocks = int(line.strip().split()[-1])
 
+    mask_ip = None if no_masking else db.get_masking_ip()
+    mask_jobid = db.get_masking_jobid()
+
     if force:
         db.remove_blocks()
         db.remove_daligner_jobs()
 
     for i in range(1, n_blocks + 1):
         block_name = '{0}.{1}'.format(projname, i)
-        db.add_block(i, block_name)
+        try:
+            db.add_block(i, block_name)
+        except RuntimeError as rte:
+            print('error: {0}, use --force to override'.format(rte), file=sys.stderr)
+            exit(1)
         db.add_daligner_job(i, i, 1)
-        job = daligner_job(block_name, block_name, config)
+        job = daligner_job(block_name, block_name, mask_ip, config)
+        job.save_script()
 
     for i in range(1, n_blocks + 1):
         for j in range(i + 1, n_blocks + 1):
             db.add_daligner_job(i, j, i + 1)
             job = daligner_job('{0}.{1}'.format(projname, i),
                                '{0}.{1}'.format(projname, j),
-                               config)
-
-    db.prepare(force=force)
+                               mask_ip, config)
 
 def start_mask(node=None, threads=4, port=12345):
     config = mc()
-    db_name = os.path.join('.', 'marveldb')
-    db = mj.marvel_db.from_file(db_name)
+    db = get_database()
 
     masking_status = db.masking_status()
 
@@ -136,8 +169,7 @@ def start_mask(node=None, threads=4, port=12345):
 
 def stop_mask():
     config = mc()
-    db_name = os.path.join('.', 'marveldb')
-    db = mj.marvel_db.from_file(db_name)
+    db = get_database()
 
     masking_status = db.masking_status()
 
@@ -185,13 +217,23 @@ def info():
         print('error: no project found in current directory, '
               'did you run init?', file=sys.stderr)
         sys.exit(1)
-    db_name = os.path.join('.', 'marveldb')
-    db = mj.marvel_db.from_file(db_name)
+    db = get_database()
+    update_statuses()
     project_info = db.info()
     print('MARVEL project started on {0}'.format(project_info['started on']))
     widest = max(map(len, db.info().keys()))
     for k, v in db.info().items():
         print('{0:>{widest}}: {1}'.format(k, v, widest=widest))
+
+def update_statuses():
+    db = get_database()
+
+    db.update_masking_job_status()
+    db.update_prepare_job_status()
+
+    prepare_status = db.prepare_status()
+    if not db.is_prepared() and prepare_status == slurm_utils.status.completed:
+        db.prepare()
 
 # Helper functions for the argument parsing
 def directory_exists(s):
@@ -261,6 +303,14 @@ def parse_args():
     # Stop masking server
     mask_stop = mask_subparsers.add_parser('stop', help='stop masking server')
 
+    # daligner
+    dalign_parser = subparsers.add_parser('daligner', help='Run daligner')
+    dalign_parser.add_argument('-f', '--force', help='forcefully add daligner '
+                               'jobs, removing any existing jobs',
+                               action='store_true')
+    dalign_parser.add_argument('--no-masking', help='do not use the masking '
+                               'server', action='store_true')
+
     args = parser.parse_args()
 
     # Argument validation
@@ -307,6 +357,8 @@ def main():
         mask_status()
     if args.subcommand == 'mask' and args.subsubcommand == 'stop':
         stop_mask()
+    if args.subcommand == 'daligner':
+        start_daligner(args.force, args.no_masking)
     if args.subcommand == 'info':
         info()
 

@@ -50,19 +50,33 @@ class marvel_job:
                         if self.sbatch_args.get('node') is not None else '',
                      '#SBATCH -t {0}'.format(self.sbatch_args.get('timelimit')) \
                         if self.sbatch_args.get('timelimit') is not None else '',
+                     '#SBATCH -o {0}'.format(self.logfile),
                      'set -eu',
                      self.commandline()]
         return '\n'.join([x for x in cmd_lines if len(x) > 0])+'\n'
 
+class prepare_job(marvel_job):
+
+    def __init__(self, name, fasta, config):
+        args = ['--blocksize', config.get('general', 'blocksize'),
+                name, fasta]
+        super().__init__(os.path.join(marvel.config.PATH_SCRIPTS,
+                                      'DBprepare.py'),
+                         'marvel_prepare', args, config,
+                         timelimit='1-00:00:00')
+
 class daligner_job(marvel_job):
 
-    def __init__(self, block1, block2, config):
+    def __init__(self, block1, block2, mask_ip, config):
         jobname = '{0}.{1}.dalign'.format(block1, block2)
         args = [
             '-v' if config.getboolean('daligner', 'verbose') else '',
             '-I' if config.getboolean('daligner', 'identity') else '',
             '-t', config.get('daligner', 'tuple_suppression_frequency'),
             '-e', config.get('daligner', 'correlation_rate'),
+            '-D' if mask_ip is not None else '',
+            '{0}:{1}'.format(mask_ip, config.get('DMserver', 'port')) \
+                if mask_ip is not None else '',
             '-j', config.get('daligner', 'threads'),
             block1, block2
         ]
