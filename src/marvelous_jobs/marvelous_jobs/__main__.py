@@ -255,7 +255,8 @@ def update_statuses():
     db = get_database()
 
     db.update_masking_job_status()
-    db.update_prepare_job_status()
+    if not db.is_prepared():
+        db.update_prepare_job_status()
 
     prepare_status = db.prepare_status()
     if not db.is_prepared() and prepare_status == slurm_utils.status.completed:
