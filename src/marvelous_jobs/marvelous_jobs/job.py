@@ -70,7 +70,7 @@ class prepare_job(marvel_job):
 
 class daligner_job(marvel_job):
 
-    def __init__(self, block1, block2, mask_ip, config, **kwargs):
+    def __init__(self, block1, block2, mask_ip, config, jobid=None, **kwargs):
         jobname = '{0}.{1}.dalign'.format(block1, block2)
         args = [
             '-v' if config.getboolean('daligner', 'verbose') else '',
@@ -86,7 +86,7 @@ class daligner_job(marvel_job):
         super().__init__(os.path.join(marvel.config.PATH_BIN, 'daligner'),
                          jobname, args, config,
                          timelimit=config.get('daligner', 'timelimit'),
-                         **kwargs)
+                         jobid=jobid, **kwargs)
 
 class masking_server_job(marvel_job):
 

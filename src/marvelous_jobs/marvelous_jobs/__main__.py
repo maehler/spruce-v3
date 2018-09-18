@@ -120,6 +120,7 @@ def start_daligner(force=False, no_masking=False):
 
     if force:
         db.remove_blocks()
+        stop_daligner()
         db.remove_daligner_jobs()
 
     for i in range(1, n_blocks + 1):
@@ -134,6 +135,7 @@ def start_daligner(force=False, no_masking=False):
                            after=mask_jobid)
         job.save_script()
         jobid = job.start()
+        db.update_daligner_job_id(i, i, jobid)
 
     for i in range(1, n_blocks + 1):
         for j in range(i + 1, n_blocks + 1):
@@ -144,6 +146,22 @@ def start_daligner(force=False, no_masking=False):
                                after=mask_jobid)
             job.save_script()
             jobid = job.start()
+            db.update_daligner_job_id(i, j, jobid)
+
+def stop_daligner():
+    db = get_database()
+    projname = db.get_project_name()
+    mask_ip = db.get_masking_ip()
+
+    for jobid, id1, id2 in db.get_daligner_jobs():
+        status = slurm_utils.get_job_status(jobid)
+        if status not in (slurm_utils.status.running,
+                          slurm_utils.status.pending):
+            continue
+        job = daligner_job('{0}.{1}'.format(projname, id1),
+                           '{0}.{1}'.format(projname, id2),
+                           mask_ip, mc(), jobid=jobid)
+        job.cancel()
 
 def start_mask(node=None, threads=4, port=12345):
     config = mc()
@@ -187,6 +205,8 @@ def stop_mask():
                                  slurm_utils.status.pending):
         print('error: masking server already stopped', file=sys.stderr)
         sys.exit(1)
+
+    stop_daligner()
 
     job = masking_server_job(db.get_project_name(),
                              db.get_coverage(),
@@ -240,6 +260,8 @@ def update_statuses():
     prepare_status = db.prepare_status()
     if not db.is_prepared() and prepare_status == slurm_utils.status.completed:
         db.prepare()
+
+    db.update_daligner_job_status()
 
 # Helper functions for the argument parsing
 def directory_exists(s):

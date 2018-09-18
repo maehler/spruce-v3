@@ -88,6 +88,29 @@ class marvel_db:
                         VALUES (?, ?, ?, datetime('now', 'localtime'))''', (id1, id2, priority))
         self._db.commit()
 
+    def update_daligner_job_id(self, id1, id2, jobid):
+        self._c.execute('''UPDATE daligner_job
+                            SET jobid = ?
+                            WHERE block_id1 = ? AND block_id2 = ?''',
+                        (jobid, id1, id2))
+        self._db.commit()
+
+    def update_daligner_job_status(self):
+        self._c.execute('SELECT jobid FROM daligner_job')
+
+        for (jobid,) in self._c.fetchall():
+            status = slurm_utils.get_job_status(jobid)
+            self._c.execute('''UPDATE daligner_job
+                                SET status = ?
+                                WHERE jobid = ?''',
+                           (status, jobid))
+
+        self._db.commit()
+
+    def get_daligner_jobs(self):
+        self._c.execute('SELECT jobid, block_id1, block_id2 FROM daligner_job')
+        return self._c.fetchall()
+
     def add_prepare_job(self):
         self._c.execute('''INSERT INTO prepare_job (last_update)
                         VALUES (datetime('now', 'localtime'))''')
@@ -225,6 +248,24 @@ class marvel_db:
                         WHERE status = ?''', (slurm_utils.status.completed,))
         return self._c.fetchone()[0]
 
+    def n_daligner_jobs_cancelled(self):
+        self._c.execute('''SELECT COUNT(block_id1)
+                        FROM daligner_job
+                        WHERE status = ?''', (slurm_utils.status.cancelled,))
+        return self._c.fetchone()[0]
+
+    def n_daligner_jobs_failed(self):
+        self._c.execute('''SELECT COUNT(block_id1)
+                        FROM daligner_job
+                        WHERE status = ?''', (slurm_utils.status.failed,))
+        return self._c.fetchone()[0]
+
+    def n_daligner_jobs_pending(self):
+        self._c.execute('''SELECT COUNT(block_id1)
+                        FROM daligner_job
+                        WHERE status = ?''', (slurm_utils.status.pending,))
+        return self._c.fetchone()[0]
+
     def get_project_name(self):
         self._c.execute('SELECT name FROM project')
         return self._c.fetchone()[0]
@@ -245,6 +286,9 @@ class marvel_db:
                     'daligner jobs': self.n_daligner_jobs(),
                     'daligner jobs running': self.n_daligner_jobs_running(),
                     'daligner jobs finished': self.n_daligner_jobs_finished(),
+                    'daligner jobs pending': self.n_daligner_jobs_pending(),
+                    'daligner jobs cancelled': self.n_daligner_jobs_cancelled(),
+                    'daligner jobs failed': self.n_daligner_jobs_failed(),
                     'daligner jobs not started': self.n_daligner_jobs_not_started()}
         else:
             if key not in res.keys():
