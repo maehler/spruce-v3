@@ -82,14 +82,22 @@ class prepare_job(marvel_job):
 
 class daligner_job(marvel_job):
 
-    def __init__(self, block1, block2, use_masking_server=False, jobid=None, **kwargs):
+    def __init__(self, block_id1, block_id2, use_masking_server=False, jobid=None, **kwargs):
         config = mj.marvelous_config()
         db = mj.marvel_db.from_file(config.get('general', 'database'))
 
+        self.use_masking_server = use_masking_server
         if use_masking_server:
             masking_ip = db.get_masking_ip()
         else:
             masking_ip = None
+
+        self.block_id1 = block_id1
+        self.block_id2 = block_id2
+
+        project_name = db.get_project_name()
+        block1 = '{0}.{1}'.format(project_name, self.block_id1)
+        block2 = '{0}.{1}'.format(project_name, self.block_id2)
 
         jobname = '{0}.{1}.dalign'.format(block1, block2)
         args = [

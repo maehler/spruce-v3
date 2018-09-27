@@ -35,6 +35,7 @@ class marvel_db:
                                  block_id2 INT NOT NULL,
                                  priority INT NOT NULL,
                                  status TEXT NOT NULL DEFAULT 'NOTSTARTED',
+                                 use_masking INT NOT NULL DEFAULT 1,
                                  jobid INT,
                                  last_update TEXT,
                                  PRIMARY KEY(block_id1, block_id2),
@@ -83,11 +84,16 @@ class marvel_db:
             raise RuntimeError('block already exists')
         self._db.commit()
 
-    def add_daligner_job(self, id1, id2, priority):
+    def add_daligner_job(self, id1, id2, priority, use_masking_server=True):
         self._c.execute('''INSERT INTO daligner_job
-                        (block_id1, block_id2, priority, last_update)
-                        VALUES (?, ?, ?, datetime('now', 'localtime'))''', (id1, id2, priority))
+                        (block_id1, block_id2, priority, use_masking, last_update)
+                        VALUES (?, ?, ?, ?, datetime('now', 'localtime'))''',
+                        (id1, id2, 1 if use_masking_server else 0, priority))
         self._db.commit()
+
+    def any_using_masking(self):
+        self._c.execute('SELECT COUNT(*) FROM daligner_job WHERE use_masking = 1')
+        return self._c.fetchone()[0] > 0
 
     def update_daligner_job_id(self, id1, id2, jobid):
         self._c.execute('''UPDATE daligner_job
@@ -109,13 +115,11 @@ class marvel_db:
         self._db.commit()
 
     def get_daligner_jobs(self):
-        self._c.execute('''SELECT jobid, block1.name, block2.name
-                        FROM daligner_job
-                        LEFT JOIN block AS block1 ON block1.id = block_id1
-                        LEFT JOIN block AS block2 ON block2.id = block_id2''')
+        self._c.execute('''SELECT jobid, block_id1, block_id2, use_masking
+                        FROM daligner_job''')
         jobs = []
         for j in self._c.fetchall():
-            jobs.append(daligner_job(j[1], j[2], jobid=j[0]))
+            jobs.append(daligner_job(j[1], j[2], use_masking_server=j[3], jobid=j[0]))
 
         return jobs
 

@@ -135,8 +135,8 @@ def start_daligner(force=False, no_masking=False):
         except RuntimeError as rte:
             print('error: {0}, use --force to override'.format(rte), file=sys.stderr)
             exit(1)
-        db.add_daligner_job(i, i, 1)
-        job = daligner_job(block_name, block_name,
+        db.add_daligner_job(i, i, 1, not no_masking)
+        job = daligner_job(i, i,
                            use_masking_server=not no_masking,
                            after=mask_jobid)
         job.save_script()
@@ -146,9 +146,8 @@ def start_daligner(force=False, no_masking=False):
 
     for i in range(1, n_blocks + 1):
         for j in range(i + 1, n_blocks + 1):
-            db.add_daligner_job(i, j, i + 1)
-            job = daligner_job('{0}.{1}'.format(projname, i),
-                               '{0}.{1}'.format(projname, j),
+            db.add_daligner_job(i, j, i + 1, not no_masking)
+            job = daligner_job(i, j,
                                use_masking_server=not no_masking,
                                after=mask_jobid)
             job.save_script()
