@@ -267,6 +267,47 @@ def info():
     for k, v in db.info().items():
         print('{0:>{widest}}: {1}'.format(k, v, widest=widest))
 
+def update_and_restart():
+    db = get_database()
+    update_statuses()
+
+    old_masking_ip = db.get_masking_ip()
+    masking_status = db.masking_status()
+
+    if masking_status is not None \
+            and masking_status[1] not in \
+            (slurm_utils.status.notstarted,
+             slurm_utils.status.running,
+             slurm_utils.status.pending) \
+            and db.any_using_masking():
+        print('Masking server is down, restarting...')
+        stop_daligner(status=(slurm_utils.status.running,))
+        start_mask(node=db.get_masking_node())
+
+    update_statuses()
+
+    masking_ip_changed = old_masking_ip != db.get_masking_ip()
+
+    print('Restarting failed or cancelled jobs...')
+    if masking_ip_changed:
+        print('Masking server IP changed, also restarting pending jobs...')
+
+    for dj in db.get_daligner_jobs():
+        job_status = slurm_utils.get_job_status(dj.jobid)
+        if job_status not in (slurm_utils.status.running,
+                              slurm_utils.status.pending,
+                              slurm_utils.status.completed,
+                              slurm_utils.status.completing):
+            dj.start()
+            db.update_daligner_job_id(dj.block_id1, dj.block_id2, dj.jobid)
+        if job_status == slurm_utils.status.pending \
+                and masking_ip_changed:
+            dj.cancel()
+            dj.start()
+            db.update_daligner_job_id(dj.block_id1, dj.block_id2, dj.jobid)
+
+    update_statuses()
+
 def update_statuses():
     db = get_database()
 
@@ -360,6 +401,9 @@ def parse_args():
     dalign_parser.add_argument('--no-masking', help='do not use the masking '
                                'server', action='store_true')
 
+    # Update status and restart jobs if necessary
+    fix_parser = subparsers.add_parser('fix', help='Update and restart jobs')
+
     args = parser.parse_args()
 
     # Argument validation
@@ -408,6 +452,8 @@ def main():
         stop_mask()
     if args.subcommand == 'daligner':
         start_daligner(args.force, args.no_masking)
+    if args.subcommand == 'fix':
+        update_and_restart()
     if args.subcommand == 'info':
         info()
 
