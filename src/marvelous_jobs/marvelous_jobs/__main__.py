@@ -34,7 +34,8 @@ def init(name, coverage, account=None, directory='.', force=False):
     config = mc(cdict={
         'general': {
             'account': account,
-            'database': db_name
+            'database': db_name,
+            'directory': os.path.abspath(directory)
         },
         'daligner': {
             'verbose': True,

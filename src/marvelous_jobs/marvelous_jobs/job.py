@@ -99,8 +99,17 @@ class daligner_job(marvel_job):
         block1 = '{0}.{1}'.format(project_name, self.block_id1)
         block2 = '{0}.{1}'.format(project_name, self.block_id2)
 
+        output_file1 = os.path.join(config.get('general', 'directory'),
+                                    'd001_{0:05d}'.format(self.block_id1),
+                                    '{0}.{1}.las'.format(block1, block2))
+
+        output_file2 = os.path.join(config.get('general', 'directory'),
+                                    'd001_{0:05d}'.format(self.block_id2),
+                                    '{0}.{1}.las'.format(block2, block1))
+
         jobname = '{0}.{1}.dalign'.format(block1, block2)
-        args = [
+
+        daligner_args = [
             '-v' if config.getboolean('daligner', 'verbose') else '',
             '-I' if config.getboolean('daligner', 'identity') else '',
             '-t', config.get('daligner', 'tuple_suppression_frequency'),
@@ -111,8 +120,14 @@ class daligner_job(marvel_job):
             '-j', config.get('daligner', 'threads'),
             block1, block2
         ]
-        super().__init__(os.path.join(marvel.config.PATH_BIN, 'daligner'),
-                         jobname, args,
+
+        gzip_args = [output_file1]
+        if block1 != block2:
+            gzip_args.append(output_file2)
+
+        super().__init__([os.path.join(marvel.config.PATH_BIN, 'daligner'),
+                          'gzip'],
+                         jobname, [daligner_args, gzip_args],
                          timelimit=config.get('daligner', 'timelimit'),
                          jobid=jobid, **kwargs)
 
