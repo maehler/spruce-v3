@@ -82,6 +82,7 @@ def prepare(fasta, blocksize, script_directory, log_directory, force=False):
     config.set('general', 'script_directory',
                os.path.abspath(script_directory))
     config.set('general', 'log_directory', os.path.abspath(log_directory))
+    config.set('general', 'fasta', os.path.abspath(fasta))
 
     db.add_prepare_job()
     job = prepare_job(projname, fasta)
