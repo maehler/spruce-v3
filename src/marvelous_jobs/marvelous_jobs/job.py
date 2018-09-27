@@ -19,8 +19,18 @@ class marvel_job:
         self.logfile = os.path.join(config.get('general', 'log_directory'),
                                     '{0}.log'.format(self.jobname))
 
+        if type(self.executable) is list:
+            assert len(self.args) == len(self.executable)
+        else:
+            self.args = [self.args]
+            self.executable = [self.executable]
+
     def commandline(self):
-        return ' '.join(x for x in [self.executable] + self.args if len(x) > 0)
+        lines = []
+        for executable, args in zip(self.executable, self.args):
+            lines.append(' '.join(x for x in [executable] + args \
+                                  if len(x) > 0))
+        return '\n'.join(lines)
 
     def save_script(self):
         with open(self.filename, 'w') as f:
