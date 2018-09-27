@@ -2,11 +2,12 @@ import os
 from subprocess import Popen, PIPE
 
 import marvel
-from marvelous_jobs import slurm_utils
+import marvelous_jobs as mj
 
 class marvel_job:
 
-    def __init__(self, executable, jobname, args, config, jobid=None, **kwargs):
+    def __init__(self, executable, jobname, args, jobid=None, **kwargs):
+        config = mj.marvelous_config()
         self.sbatch_args = kwargs
         self.executable = executable
         self.args = args
@@ -60,37 +61,47 @@ class marvel_job:
 
 class prepare_job(marvel_job):
 
-    def __init__(self, name, fasta, config):
+    def __init__(self, name, fasta):
+        config = mj.marvelous_config()
         args = ['--blocksize', config.get('general', 'blocksize'),
                 name, fasta]
         super().__init__(os.path.join(marvel.config.PATH_SCRIPTS,
                                       'DBprepare.py'),
-                         'marvel_prepare', args, config,
+                         'marvel_prepare', args,
                          timelimit='1-00:00:00')
 
 class daligner_job(marvel_job):
 
-    def __init__(self, block1, block2, mask_ip, config, jobid=None, **kwargs):
+    def __init__(self, block1, block2, use_masking_server=False, jobid=None, **kwargs):
+        config = mj.marvelous_config()
+        db = mj.marvel_db.from_file(config.get('general', 'database'))
+
+        if use_masking_server:
+            masking_ip = db.get_masking_ip()
+        else:
+            masking_ip = None
+
         jobname = '{0}.{1}.dalign'.format(block1, block2)
         args = [
             '-v' if config.getboolean('daligner', 'verbose') else '',
             '-I' if config.getboolean('daligner', 'identity') else '',
             '-t', config.get('daligner', 'tuple_suppression_frequency'),
             '-e', config.get('daligner', 'correlation_rate'),
-            '-D' if mask_ip is not None else '',
-            '{0}:{1}'.format(mask_ip, config.get('DMserver', 'port')) \
-                if mask_ip is not None else '',
+            '-D' if masking_ip is not None else '',
+            '{0}:{1}'.format(masking_ip, config.get('DMserver', 'port')) \
+                if masking_ip is not None else '',
             '-j', config.get('daligner', 'threads'),
             block1, block2
         ]
         super().__init__(os.path.join(marvel.config.PATH_BIN, 'daligner'),
-                         jobname, args, config,
+                         jobname, args,
                          timelimit=config.get('daligner', 'timelimit'),
                          jobid=jobid, **kwargs)
 
 class masking_server_job(marvel_job):
 
-    def __init__(self, name, coverage, node, config, jobid=None):
+    def __init__(self, name, coverage, node, jobid=None):
+        config = mj.marvelous_config()
         jobname = 'marvel_masking'
         self.port = config.getint('DMserver', 'port')
         self.threads = config.getint('DMserver', 'threads')
@@ -100,9 +111,9 @@ class masking_server_job(marvel_job):
             name, str(coverage)
         ]
         self.node = node
-        self.ip = slurm_utils.get_node_ip(node)
+        self.ip = mj.slurm_utils.get_node_ip(node)
         super().__init__(os.path.join(marvel.config.PATH_BIN, 'DMserver'),
-                         jobname, args, config, jobid=jobid, node=node,
+                         jobname, args, jobid=jobid, node=node,
                          timelimit=config.get('DMserver', 'timelimit'))
 
     def stop(self):

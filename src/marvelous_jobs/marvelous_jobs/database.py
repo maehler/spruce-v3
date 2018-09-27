@@ -54,7 +54,7 @@ class marvel_db:
 
             self._c.execute('''INSERT INTO project
                                 (name, coverage, started_on)
-                                VALUES (?, ?, datetime('now', 'localtime))''', (name, coverage))
+                                VALUES (?, ?, datetime('now', 'localtime'))''', (name, coverage))
             self._db.commit()
 
     @classmethod

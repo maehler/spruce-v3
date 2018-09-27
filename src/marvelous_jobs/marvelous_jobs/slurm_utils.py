@@ -23,6 +23,8 @@ def get_node_ip(n):
     return socket.gethostbyname(n)
 
 def get_job_status(jobid):
+    if jobid is None:
+        return status.notstarted
     try:
         return pyslurm.job().find_id(str(jobid))[0]['job_state']
     except ValueError:

@@ -32,7 +32,10 @@ def init(name, coverage, account=None, directory='.', force=False):
                  coverage=coverage, force=force)
 
     config = mc(cdict={
-        'general': {'account': account},
+        'general': {
+            'account': account,
+            'database': db_name
+        },
         'daligner': {
             'verbose': True,
             'identity': True,
@@ -75,11 +78,12 @@ def prepare(fasta, blocksize, script_directory, log_directory, force=False):
 
     config = mc()
     config.set('general', 'blocksize', blocksize)
-    config.set('general', 'script_directory', script_directory)
-    config.set('general', 'log_directory', log_directory)
+    config.set('general', 'script_directory',
+               os.path.abspath(script_directory))
+    config.set('general', 'log_directory', os.path.abspath(log_directory))
 
     db.add_prepare_job()
-    job = prepare_job(projname, fasta, config)
+    job = prepare_job(projname, fasta)
     job.save_script()
     jobid = job.start()
     db.update_prepare_job_id(jobid)
@@ -115,7 +119,6 @@ def start_daligner(force=False, no_masking=False):
             if line.strip().startswith('blocks'):
                 n_blocks = int(line.strip().split()[-1])
 
-    mask_ip = None if no_masking else db.get_masking_ip()
     mask_jobid = db.get_masking_jobid()
 
     if force:
@@ -131,7 +134,8 @@ def start_daligner(force=False, no_masking=False):
             print('error: {0}, use --force to override'.format(rte), file=sys.stderr)
             exit(1)
         db.add_daligner_job(i, i, 1)
-        job = daligner_job(block_name, block_name, mask_ip, config,
+        job = daligner_job(block_name, block_name,
+                           use_masking_server=not no_masking,
                            after=mask_jobid)
         job.save_script()
         jobid = job.start()
@@ -142,7 +146,7 @@ def start_daligner(force=False, no_masking=False):
             db.add_daligner_job(i, j, i + 1)
             job = daligner_job('{0}.{1}'.format(projname, i),
                                '{0}.{1}'.format(projname, j),
-                               mask_ip, config,
+                               use_masking_server=not no_masking,
                                after=mask_jobid)
             job.save_script()
             jobid = job.start()
@@ -169,6 +173,9 @@ def start_mask(node=None, threads=4, port=12345):
 
     masking_status = db.masking_status()
 
+    config.set('DMserver', 'threads', threads)
+    config.set('DMserver', 'port', port)
+
     if masking_status is not None \
        and masking_status[1] in (slurm_utils.status.running,
                                  slurm_utils.status.pending,
@@ -178,7 +185,7 @@ def start_mask(node=None, threads=4, port=12345):
 
     job = masking_server_job(db.get_project_name(),
                              db.get_coverage(),
-                             node, config)
+                             node)
     db.add_masking_job(job)
     job.save_script()
 
@@ -254,7 +261,11 @@ def info():
 def update_statuses():
     db = get_database()
 
-    db.update_masking_job_status()
+    try:
+        db.update_masking_job_status()
+    except ValueError as ve:
+        print('warning: {0}, job has most likely expired'.format(ve),
+              file=sys.stderr)
     if not db.is_prepared():
         db.update_prepare_job_status()
 
