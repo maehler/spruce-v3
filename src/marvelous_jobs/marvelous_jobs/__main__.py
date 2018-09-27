@@ -126,6 +126,8 @@ def start_daligner(force=False, no_masking=False):
         stop_daligner()
         db.remove_daligner_jobs()
 
+    print('Starting daligner jobs: ', end='')
+
     for i in range(1, n_blocks + 1):
         block_name = '{0}.{1}'.format(projname, i)
         try:
@@ -140,6 +142,7 @@ def start_daligner(force=False, no_masking=False):
         job.save_script()
         jobid = job.start()
         db.update_daligner_job_id(i, i, jobid)
+        print('.', end='')
 
     for i in range(1, n_blocks + 1):
         for j in range(i + 1, n_blocks + 1):
@@ -151,6 +154,9 @@ def start_daligner(force=False, no_masking=False):
             job.save_script()
             jobid = job.start()
             db.update_daligner_job_id(i, j, jobid)
+            print('.', end='')
+
+    print()
 
 def stop_daligner(status=[slurm_utils.status.running,
                           slurm_utils.status.pending]):
@@ -158,12 +164,16 @@ def stop_daligner(status=[slurm_utils.status.running,
     projname = db.get_project_name()
     mask_ip = db.get_masking_ip()
 
+    print('Stopping daligner jobs: ', end='')
 
     for dj in db.get_daligner_jobs():
         job_status = slurm_utils.get_job_status(dj.jobid)
         if job_status not in status:
             continue
         dj.cancel()
+        print('.', end='')
+
+    print('')
 
 def start_mask(node=None, threads=4, port=12345):
     config = mc()
@@ -217,6 +227,8 @@ def stop_mask():
                              db.get_coverage(),
                              db.get_masking_node(),
                              jobid=masking_status[0])
+
+    print('Stopping masking server...')
 
     if masking_status[1] == slurm_utils.status.running:
         job.stop()
