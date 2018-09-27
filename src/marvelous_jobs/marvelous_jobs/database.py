@@ -2,6 +2,7 @@ import os
 import sqlite3
 
 from marvelous_jobs import slurm_utils
+from marvelous_jobs.job import daligner_job
 
 class marvel_db:
 
@@ -108,8 +109,15 @@ class marvel_db:
         self._db.commit()
 
     def get_daligner_jobs(self):
-        self._c.execute('SELECT jobid, block_id1, block_id2 FROM daligner_job')
-        return self._c.fetchall()
+        self._c.execute('''SELECT jobid, block1.name, block2.name
+                        FROM daligner_job
+                        LEFT JOIN block AS block1 ON block1.id = block_id1
+                        LEFT JOIN block AS block2 ON block2.id = block_id2''')
+        jobs = []
+        for j in self._c.fetchall():
+            jobs.append(daligner_job(j[1], j[2], jobid=j[0]))
+
+        return jobs
 
     def add_prepare_job(self):
         self._c.execute('''INSERT INTO prepare_job (last_update)
