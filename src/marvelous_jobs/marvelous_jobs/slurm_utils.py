@@ -1,5 +1,6 @@
 import pyslurm
 import socket
+from subprocess import Popen,PIPE
 
 class status:
     pending = 'PENDING'
@@ -28,4 +29,15 @@ def get_job_status(jobid):
     try:
         return pyslurm.job().find_id(str(jobid))[0]['job_state']
     except ValueError:
-        raise
+        p = Popen(['sacct', '-j', str(jobid),
+                   '--format', 'JobID,State',
+                   '--noheader', '--parsable2'],
+                  shell=False, stdout=PIPE, stderr=PIPE,
+                  encoding='utf8')
+        (output, err) = p.communicate()
+        for line in output.splitlines():
+            str_jobid, status = line.strip().split('|')
+            if str(jobid) == str_jobid:
+                return status
+
+    raise ValueError('invalid job id specified')
