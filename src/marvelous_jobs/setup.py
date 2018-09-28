@@ -13,7 +13,7 @@ setup(
 
     install_requires=[
         'pyslurm'
-    ]
+    ],
 
     author='Niklas Mähler',
     author_email='niklas.mahler@gmail.com',
