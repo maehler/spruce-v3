@@ -62,6 +62,10 @@ class marvel_job:
                      '#SBATCH -t {0}'.format(self.sbatch_args.get('timelimit')) \
                         if self.sbatch_args.get('timelimit') is not None else '',
                      '#SBATCH -o {0}'.format(self.logfile),
+                     '#SBATCH -p {0}'.format(self.sbatch_args.get('partition')) \
+                        if self.sbatch_args.get('partition') is not None else '',
+                     '#SBATCH -n {0}'.format(self.sbatch_args.get('cores')) \
+                        if self.sbatch_args.get('cores') is not None else '',
                      '#SBATCH --dependency after:{0}'\
                         .format(self.sbatch_args.get('after')) \
                         if self.sbatch_args.get('after') is not None else '',
@@ -129,7 +133,8 @@ class daligner_job(marvel_job):
                           'gzip'],
                          jobname, [daligner_args, gzip_args],
                          timelimit=config.get('daligner', 'timelimit'),
-                         jobid=jobid, **kwargs)
+                         jobid=jobid, cores=config.get('daligner', 'threads'),
+                         **kwargs)
 
 class masking_server_job(marvel_job):
 
@@ -147,7 +152,8 @@ class masking_server_job(marvel_job):
         self.ip = mj.slurm_utils.get_node_ip(node)
         super().__init__(os.path.join(marvel.config.PATH_BIN, 'DMserver'),
                          jobname, args, jobid=jobid, node=node,
-                         timelimit=config.get('DMserver', 'timelimit'))
+                         timelimit=config.get('DMserver', 'timelimit'),
+                         partition='node')
 
     def stop(self):
         dmctl = os.path.join(marvel.config.PATH_BIN, 'DMctl')
