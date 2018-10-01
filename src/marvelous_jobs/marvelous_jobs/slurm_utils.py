@@ -24,6 +24,8 @@ def get_node_ip(n):
     return socket.gethostbyname(n)
 
 def get_job_status(jobid):
+    global status
+
     if jobid is None:
         return status.notstarted
     try:
@@ -36,8 +38,8 @@ def get_job_status(jobid):
                   encoding='utf8')
         (output, err) = p.communicate()
         for line in output.splitlines():
-            str_jobid, status = line.strip().split('|')
+            str_jobid, job_status = line.strip().split('|')
             if str(jobid) == str_jobid:
-                return status
+                return job_status
 
     raise ValueError('invalid job id specified')
