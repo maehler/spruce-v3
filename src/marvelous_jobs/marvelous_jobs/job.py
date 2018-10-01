@@ -6,30 +6,24 @@ import marvelous_jobs as mj
 
 class marvel_job:
 
-    def __init__(self, executable, jobname, args, jobid=None, **kwargs):
+    def __init__(self, args, jobname, filename, jobid=None, **kwargs):
         config = mj.marvelous_config()
         self.sbatch_args = kwargs
-        self.executable = executable
         self.args = args
         self.jobname = jobname
         self.jobid = jobid
         self.account = config.get('general', 'account')
-        self.filename = os.path.join(config.get('general', 'script_directory'),
-                                     '{0}.sh'.format(self.jobname))
+        self.filename = os.path.join(config.get('general', 'script_directory'), filename)
         self.logfile = os.path.join(config.get('general', 'log_directory'),
                                     '{0}.log'.format(self.jobname))
 
-        if type(self.executable) is list:
-            assert len(self.args) == len(self.executable)
-        else:
+        if type(self.args[0]) is not list:
             self.args = [self.args]
-            self.executable = [self.executable]
 
     def commandline(self):
         lines = []
-        for executable, args in zip(self.executable, self.args):
-            lines.append(' '.join(x for x in [executable] + args \
-                                  if len(x) > 0))
+        for args in self.args:
+            lines.append(' '.join(x for x in args if len(x) > 0))
         return '\n'.join(lines)
 
     def save_script(self):
@@ -77,11 +71,12 @@ class prepare_job(marvel_job):
 
     def __init__(self, name, fasta):
         config = mj.marvelous_config()
-        args = ['--blocksize', config.get('general', 'blocksize'),
+        args = [os.path.join(marvel.config.PATH_SCRIPTS, 'DBprepare.py'),
+                '--blocksize', config.get('general', 'blocksize'),
                 name, fasta]
-        super().__init__(os.path.join(marvel.config.PATH_SCRIPTS,
-                                      'DBprepare.py'),
-                         'marvel_prepare', args,
+        super().__init__(args,
+                         'marvel_prepare',
+                         'marvel_prepare.sh',
                          timelimit='1-00:00:00')
 
 class daligner_job(marvel_job):
@@ -102,18 +97,10 @@ class daligner_job(marvel_job):
         project_name = db.get_project_name()
         block1 = '{0}.{1}'.format(project_name, self.block_id1)
         block2 = '{0}.{1}'.format(project_name, self.block_id2)
-
-        output_file1 = os.path.join(config.get('general', 'directory'),
-                                    'd001_{0:05d}'.format(self.block_id1),
-                                    '{0}.{1}.las'.format(block1, block2))
-
-        output_file2 = os.path.join(config.get('general', 'directory'),
-                                    'd001_{0:05d}'.format(self.block_id2),
-                                    '{0}.{1}.las'.format(block2, block1))
-
         jobname = '{0}.{1}.dalign'.format(block1, block2)
 
         daligner_args = [
+            os.path.join(marvel.config.PATH_BIN, 'daligner'),
             '-v' if config.getboolean('daligner', 'verbose') else '',
             '-I' if config.getboolean('daligner', 'identity') else '',
             '-t', config.get('daligner', 'tuple_suppression_frequency'),
@@ -122,16 +109,23 @@ class daligner_job(marvel_job):
             '{0}:{1}'.format(masking_ip, config.get('DMserver', 'port')) \
                 if masking_ip is not None else '',
             '-j', config.get('daligner', 'threads'),
-            block1, block2
+            '"{0}.$1"'.format(project_name), '"{0}.$2"'.format(project_name)
         ]
 
-        gzip_args = [output_file1]
-        if block1 != block2:
-            gzip_args.append(output_file2)
+        gzip_args = [
+            ['gzip', '-f',
+             '{0}/d001_$(printf "%05d" $1)/{1}.$1.{1}.$2.las' \
+                .format(config.get('general', 'directory'), project_name)],
+            ['if [[ $1 != $2 ]]; then'],
+            ['\tgzip', '-f',
+             '{0}/d001_$(printf "%05d" $2)/{1}.$2.{1}.$1.las' \
+                .format(config.get('general', 'directory'), project_name)],
+            ['fi']
+        ]
 
-        super().__init__([os.path.join(marvel.config.PATH_BIN, 'daligner'),
-                          'gzip'],
-                         jobname, [daligner_args, gzip_args],
+        super().__init__([daligner_args] + gzip_args,
+                         jobname,
+                         'daligner.sh',
                          timelimit=config.get('daligner', 'timelimit'),
                          jobid=jobid, cores=config.get('daligner', 'threads'),
                          **kwargs)
@@ -144,14 +138,16 @@ class masking_server_job(marvel_job):
         self.port = config.getint('DMserver', 'port')
         self.threads = config.getint('DMserver', 'threads')
         args = [
+            os.path.join(marvel.config.PATH_BIN, 'DMserver'),
             '-t', config.get('DMserver', 'threads'),
             '-p', config.get('DMserver', 'port'),
             name, str(coverage)
         ]
         self.node = node
         self.ip = mj.slurm_utils.get_node_ip(node)
-        super().__init__(os.path.join(marvel.config.PATH_BIN, 'DMserver'),
-                         jobname, args, jobid=jobid, node=node,
+        super().__init__(args,
+                         jobname, 'marvel_masking.sh',
+                         jobid=jobid, node=node,
                          timelimit=config.get('DMserver', 'timelimit'),
                          partition='node')
 
