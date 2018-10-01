@@ -1,3 +1,4 @@
+import hashlib
 import os
 from subprocess import Popen, PIPE
 
@@ -27,14 +28,26 @@ class marvel_job:
         return '\n'.join(lines)
 
     def save_script(self):
-        with open(self.filename, 'w') as f:
-            f.write(str(self))
+        str_script = str(self)
+        if os.path.isfile(self.filename):
+            with open(self.filename) as f:
+                file_md5 = hashlib.md5(f.read().encode('utf8')).digest()
+            str_md5 = hashlib.md5(str_script.encode('utf8')).digest()
+            if str_md5 != file_md5:
+                with open(self.filename, 'w') as f:
+                    f.write(str_script)
+        else:
+            with open(self.filename, 'w') as f:
+                f.write(str_script)
 
-    def start(self):
-        if not os.path.isfile(self.filename):
-            self.save_script()
-        p = Popen(['sbatch', self.filename], shell=False,
-                  stdout=PIPE, stderr=PIPE)
+    def start(self, *args):
+        self.save_script()
+        p = Popen(['sbatch',
+                   '-o', self.logfile,
+                   '-J', self.jobname,
+                   self.filename,
+                   *args],
+                  shell=False, stdout=PIPE, stderr=PIPE)
         output = p.communicate()
         if len(output[1].strip()) > 0:
             raise RuntimeError(output[1].decode('utf-8'))
@@ -55,7 +68,6 @@ class marvel_job:
                         if self.sbatch_args.get('node') is not None else '',
                      '#SBATCH -t {0}'.format(self.sbatch_args.get('timelimit')) \
                         if self.sbatch_args.get('timelimit') is not None else '',
-                     '#SBATCH -o {0}'.format(self.logfile),
                      '#SBATCH -p {0}'.format(self.sbatch_args.get('partition')) \
                         if self.sbatch_args.get('partition') is not None else '',
                      '#SBATCH -n {0}'.format(self.sbatch_args.get('cores')) \
@@ -129,6 +141,9 @@ class daligner_job(marvel_job):
                          timelimit=config.get('daligner', 'timelimit'),
                          jobid=jobid, cores=config.get('daligner', 'threads'),
                          **kwargs)
+
+    def start(self):
+        super().start(str(self.block_id1), str(self.block_id2))
 
 class masking_server_job(marvel_job):
 
