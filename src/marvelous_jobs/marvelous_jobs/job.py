@@ -143,7 +143,7 @@ class daligner_job(marvel_job):
                          **kwargs)
 
     def start(self):
-        super().start(str(self.block_id1), str(self.block_id2))
+        return super().start(str(self.block_id1), str(self.block_id2))
 
 class masking_server_job(marvel_job):
 
