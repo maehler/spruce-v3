@@ -114,9 +114,23 @@ class marvel_db:
 
         self._db.commit()
 
-    def get_daligner_jobs(self):
-        self._c.execute('''SELECT jobid, block_id1, block_id2, use_masking
-                        FROM daligner_job''')
+    def get_daligner_jobs(self, max_jobs=None, status=()):
+        query = 'SELECT jobid, block_id1, block_id2, use_masking FROM daligner_job'
+        if type(status) is not str and len(status) > 0:
+            query += ' WHERE '
+            for i in range(len(status) - 1):
+                query += 'status = ? OR '
+            query += 'status = ?'
+        elif type(status) is str:
+            query += ' WHERE status = ?'
+            status = (status,)
+        query += ' ORDER BY priority'
+        if max_jobs is not None:
+            query += ' LIMIT ?'
+            args = status + (max_jobs,)
+        else:
+            args = status
+        self._c.execute(query, args)
         jobs = []
         for j in self._c.fetchall():
             jobs.append(daligner_job(j[1], j[2], use_masking_server=j[3], jobid=j[0]))
