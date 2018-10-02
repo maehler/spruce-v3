@@ -155,6 +155,7 @@ def start_daligner(force=False, no_masking=False):
 def update_daligner_queue():
     config = mc()
     db = get_database()
+    update_statuses()
 
     max_jobs = config.getint('general', 'max_number_of_jobs')
     queued_jobs = db.n_daligner_jobs(slurm_utils.status.running,
@@ -166,15 +167,23 @@ def update_daligner_queue():
         print('using masking')
         queued_jobs += 1
 
+    print('{0}/{1} jobs queued'.format(queued_jobs, max_jobs))
+
     if queued_jobs >= max_jobs:
+        print('Not queueing any more')
         return
 
     jobs_to_queue = db.get_daligner_jobs(max_jobs - queued_jobs,
                                          slurm_utils.status.notstarted)
 
+    print('Queueing {0} more jobs: '.format(len(jobs_to_queue)), end='')
+
     for dj in jobs_to_queue:
         jobid = dj.start()
         db.update_daligner_job_id(dj.block_id1, dj.block_id2, jobid)
+        print('.', end='')
+
+    print()
 
 def stop_daligner(status=[slurm_utils.status.running,
                           slurm_utils.status.pending]):
@@ -418,6 +427,10 @@ def parse_args():
 
     # daligner
     dalign_parser = subparsers.add_parser('daligner', help='Run daligner')
+    dalign_parser.add_argument('-u', '--update', help='update the job queue '
+                               'and start jobs that have not yet been started '
+                               'if there is room for them',
+                               action='store_true')
     dalign_parser.add_argument('-f', '--force', help='forcefully add daligner '
                                'jobs, removing any existing jobs',
                                action='store_true')
@@ -477,7 +490,10 @@ def main():
     if args.subcommand == 'mask' and args.subsubcommand == 'stop':
         stop_mask()
     if args.subcommand == 'daligner':
-        start_daligner(args.force, args.no_masking)
+        if args.update:
+            update_daligner_queue()
+        else:
+            start_daligner(args.force, args.no_masking)
     if args.subcommand == 'fix':
         update_and_restart()
     if args.subcommand == 'info':
