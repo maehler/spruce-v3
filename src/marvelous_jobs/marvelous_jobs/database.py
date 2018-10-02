@@ -238,44 +238,18 @@ class marvel_db:
         self._c.execute('SELECT COUNT(id) FROM block')
         return self._c.fetchone()[0]
 
-    def n_daligner_jobs(self):
-        self._c.execute('SELECT COUNT(block_id1) FROM daligner_job')
-        return self._c.fetchone()[0]
+    def n_daligner_jobs(self, *args):
+        query = 'SELECT COUNT(block_id1) FROM daligner_job'
+        if len(args) > 0:
+            query += ' WHERE '
+            if len(args) > 1:
+                for i in range(0, len(args) - 1):
+                    query += 'status = ? OR '
+            query += 'status = ?'
+            self._c.execute(query, args)
+        else:
+            self._c.execute(query)
 
-    def n_daligner_jobs_not_started(self):
-        self._c.execute('''SELECT COUNT(block_id1)
-                        FROM daligner_job
-                        WHERE status = ?''', (slurm_utils.status.notstarted,))
-        return self._c.fetchone()[0]
-
-    def n_daligner_jobs_running(self):
-        self._c.execute('''SELECT COUNT(block_id1)
-                        FROM daligner_job
-                        WHERE status = ?''', (slurm_utils.status.running,))
-        return self._c.fetchone()[0]
-
-    def n_daligner_jobs_finished(self):
-        self._c.execute('''SELECT COUNT(block_id1)
-                        FROM daligner_job
-                        WHERE status = ?''', (slurm_utils.status.completed,))
-        return self._c.fetchone()[0]
-
-    def n_daligner_jobs_cancelled(self):
-        self._c.execute('''SELECT COUNT(block_id1)
-                        FROM daligner_job
-                        WHERE status = ?''', (slurm_utils.status.cancelled,))
-        return self._c.fetchone()[0]
-
-    def n_daligner_jobs_failed(self):
-        self._c.execute('''SELECT COUNT(block_id1)
-                        FROM daligner_job
-                        WHERE status = ?''', (slurm_utils.status.failed,))
-        return self._c.fetchone()[0]
-
-    def n_daligner_jobs_pending(self):
-        self._c.execute('''SELECT COUNT(block_id1)
-                        FROM daligner_job
-                        WHERE status = ?''', (slurm_utils.status.pending,))
         return self._c.fetchone()[0]
 
     def get_project_name(self):
@@ -296,12 +270,18 @@ class marvel_db:
                     'prepared on': res[3] if res[3] is not None else 'Not prepared',
                     'blocks': self.n_blocks(),
                     'daligner jobs': self.n_daligner_jobs(),
-                    'daligner jobs running': self.n_daligner_jobs_running(),
-                    'daligner jobs finished': self.n_daligner_jobs_finished(),
-                    'daligner jobs pending': self.n_daligner_jobs_pending(),
-                    'daligner jobs cancelled': self.n_daligner_jobs_cancelled(),
-                    'daligner jobs failed': self.n_daligner_jobs_failed(),
-                    'daligner jobs not started': self.n_daligner_jobs_not_started()}
+                    'daligner jobs running':
+                        self.n_daligner_jobs(slurm_utils.status.running),
+                    'daligner jobs finished':
+                        self.n_daligner_jobs(slurm_utils.status.completed),
+                    'daligner jobs pending':
+                        self.n_daligner_jobs(slurm_utils.status.pending),
+                    'daligner jobs cancelled':
+                        self.n_daligner_jobs(slurm_utils.status.cancelled),
+                    'daligner jobs failed':
+                        self.n_daligner_jobs(slurm_utils.status.failed),
+                    'daligner jobs not started':
+                        self.n_daligner_jobs(slurm_utils.status.notstarted)}
         else:
             if key not in res.keys():
                 raise KeyError('"{0}" not a valid key'.format(key))
