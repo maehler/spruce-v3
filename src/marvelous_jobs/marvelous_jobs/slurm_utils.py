@@ -7,6 +7,7 @@ class status:
     running = 'RUNNING'
     completed = 'COMPLETED'
     completing = 'COMPLETING'
+    configuring = 'CONFIGURING'
     failed = 'FAILED'
     notstarted = 'NOTSTARTED' # not a slurm job state
     timeout = 'TIMEOUT'

@@ -2,6 +2,7 @@
 
 import argparse
 import os
+import queue
 from subprocess import Popen, PIPE
 import sys
 
@@ -21,7 +22,8 @@ def get_database():
     db = mj.marvel_db.from_file(db_name)
     return db
 
-def init(name, coverage, account=None, directory='.', force=False):
+def init(name, coverage, account=None, directory='.', force=False,
+         n_jobs=3000):
     if is_project(directory) and not force:
         print('error: project is already initialised, delete '
               '`marveldb` or use --force if you want to start over',
@@ -35,7 +37,8 @@ def init(name, coverage, account=None, directory='.', force=False):
         'general': {
             'account': account,
             'database': db_name,
-            'directory': os.path.abspath(directory)
+            'directory': os.path.abspath(directory),
+            'max_number_of_jobs': n_jobs
         },
         'daligner': {
             'verbose': True,
@@ -128,7 +131,7 @@ def start_daligner(force=False, no_masking=False):
         stop_daligner()
         db.remove_daligner_jobs()
 
-    print('Starting daligner jobs: ', end='')
+    print('Adding daligner jobs to database: ', end='')
 
     for i in range(1, n_blocks + 1):
         block_name = '{0}.{1}'.format(projname, i)
@@ -138,26 +141,40 @@ def start_daligner(force=False, no_masking=False):
             print('error: {0}, use --force to override'.format(rte), file=sys.stderr)
             exit(1)
         db.add_daligner_job(i, i, 1, not no_masking)
-        job = daligner_job(i, i,
-                           use_masking_server=not no_masking,
-                           after=mask_jobid)
-        job.save_script()
-        jobid = job.start()
-        db.update_daligner_job_id(i, i, jobid)
         print('.', end='')
 
     for i in range(1, n_blocks + 1):
         for j in range(i + 1, n_blocks + 1):
             db.add_daligner_job(i, j, i + 1, not no_masking)
-            job = daligner_job(i, j,
-                               use_masking_server=not no_masking,
-                               after=mask_jobid)
-            job.save_script()
-            jobid = job.start()
-            db.update_daligner_job_id(i, j, jobid)
             print('.', end='')
 
     print()
+
+    update_daligner_queue()
+
+def update_daligner_queue():
+    config = mc()
+    db = get_database()
+
+    max_jobs = config.getint('general', 'max_number_of_jobs')
+    queued_jobs = db.n_daligner_jobs(slurm_utils.status.running,
+                                     slurm_utils.status.pending,
+                                     slurm_utils.status.completing,
+                                     slurm_utils.status.configuring)
+
+    if db.any_using_masking():
+        print('using masking')
+        queued_jobs += 1
+
+    if queued_jobs >= max_jobs:
+        return
+
+    jobs_to_queue = db.get_daligner_jobs(max_jobs - queued_jobs,
+                                         slurm_utils.status.notstarted)
+
+    for dj in jobs_to_queue:
+        jobid = dj.start()
+        db.update_daligner_job_id(dj.block_id1, dj.block_id2, jobid)
 
 def stop_daligner(status=[slurm_utils.status.running,
                           slurm_utils.status.pending]):
@@ -336,7 +353,7 @@ def positive_integer(i):
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Job manager for MARVEL')
-    
+
     subparsers = parser.add_subparsers(title='subcommands',
                                        dest='subcommand')
 
@@ -348,6 +365,10 @@ def parse_args():
     init_parser.add_argument('-x', '--coverage', help='sequencing coverage of'
                              ' the project (default: 30)', default=30,
                              type=int)
+    init_parser.add_argument('-n', '--max-jobs', help='maximum number of '
+                             'jobs allowed to be submitted at any point '
+                             '(default: 3000)',
+                             type=int, default=3000)
     init_parser.add_argument('directory', help='directory where to '
                              'initialise the run (default: .)',
                              default='.', nargs='?')
@@ -415,6 +436,8 @@ def parse_args():
             parser.error('directory not found: {0}'.format(args.directory))
         if not positive_integer(args.coverage):
             parser.error('coverage must be a positive non-zero integer')
+        if not positive_integer(args.max_jobs):
+            parser.error('number of jobs must be a positive non-zer integer')
 
     if args.subcommand == 'prepare':
         if not positive_integer(args.blocksize):
@@ -439,7 +462,8 @@ def main():
     if args.subcommand == 'init':
         init(directory=args.directory, name=args.name,
              account=args.account,
-             coverage=args.coverage, force=args.force)
+             coverage=args.coverage, force=args.force,
+             n_jobs=args.max_jobs)
     if args.subcommand == 'prepare':
         prepare(fasta=args.fasta,
                 blocksize=args.blocksize,
