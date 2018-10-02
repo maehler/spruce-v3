@@ -88,7 +88,7 @@ class marvel_db:
         self._c.execute('''INSERT INTO daligner_job
                         (block_id1, block_id2, priority, use_masking, last_update)
                         VALUES (?, ?, ?, ?, datetime('now', 'localtime'))''',
-                        (id1, id2, 1 if use_masking_server else 0, priority))
+                        (id1, id2, priority, 1 if use_masking_server else 0))
         self._db.commit()
 
     def any_using_masking(self):
