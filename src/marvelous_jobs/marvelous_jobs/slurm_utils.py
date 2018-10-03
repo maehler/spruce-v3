@@ -41,6 +41,6 @@ def get_job_status(jobid):
         for line in output.splitlines():
             str_jobid, job_status = line.strip().split('|')
             if str(jobid) == str_jobid:
-                return job_status
+                return job_status.strip().split()[0]
 
     raise ValueError('invalid job id specified')
