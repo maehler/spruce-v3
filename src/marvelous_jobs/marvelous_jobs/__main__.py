@@ -133,6 +133,9 @@ def start_daligner(force=False, no_masking=False):
 
     print('Adding daligner jobs to database: ', end='')
 
+    total_n_jobs = int(n_blocks + ((n_blocks - 1) * n_blocks) / 2)
+    current_job = 1
+
     for i in range(1, n_blocks + 1):
         block_name = '{0}.{1}'.format(projname, i)
         try:
@@ -141,12 +144,14 @@ def start_daligner(force=False, no_masking=False):
             print('error: {0}, use --force to override'.format(rte), file=sys.stderr)
             exit(1)
         db.add_daligner_job(i, i, 1, not no_masking)
-        print('.', end='')
+        print('\rAdding daligner jobs to database: {0}/{1}'.format(current_job, total_n_jobs), end='')
+        current_job += 1
 
     for i in range(1, n_blocks + 1):
         for j in range(i + 1, n_blocks + 1):
             db.add_daligner_job(i, j, i + 1, not no_masking)
-            print('.', end='')
+            print('\rAdding daligner jobs to database: {0}/{1}'.format(current_job, total_n_jobs), end='')
+            current_job += 1
 
     print()
 
@@ -167,38 +172,30 @@ def update_daligner_queue():
         print('using masking')
         queued_jobs += 1
 
-    print('{0}/{1} jobs queued'.format(queued_jobs, max_jobs))
-
-    if queued_jobs >= max_jobs:
-        print('Not queueing any more')
-        return
+    print('Queuing jobs: {0}/{1}'.format(queued_jobs, max_jobs), end='')
 
     jobs_to_queue = db.get_daligner_jobs(max_jobs - queued_jobs,
                                          slurm_utils.status.notstarted)
 
-    print('Queueing {0} more jobs: '.format(len(jobs_to_queue)), end='')
-
-    for dj in jobs_to_queue:
+    for i, dj in enumerate(jobs_to_queue, start=1):
         jobid = dj.start()
         db.update_daligner_job_id(dj.block_id1, dj.block_id2, jobid)
-        print('.', end='')
+        print('\rQueuing jobs: {0}/{1}'.format(i, len(jobs_to_queue)), end='')
 
     print()
 
-def stop_daligner(status=[slurm_utils.status.running,
-                          slurm_utils.status.pending]):
+def stop_daligner(status=(slurm_utils.status.running,
+                          slurm_utils.status.pending)):
     db = get_database()
-    projname = db.get_project_name()
-    mask_ip = db.get_masking_ip()
+    update_statuses()
 
-    print('Stopping daligner jobs: ', end='')
+    jobs = db.get_daligner_jobs(status=tuple(status))
 
-    for dj in db.get_daligner_jobs():
-        job_status = slurm_utils.get_job_status(dj.jobid)
-        if job_status not in status:
-            continue
+    print('Stopping daligner jobs: 0/{0}'.format(len(jobs)), end='')
+
+    for i, dj in enumerate(jobs, start=1):
         dj.cancel()
-        print('.', end='')
+        print('\rStopping daligner jobs: {0}/{1}'.format(i, len(jobs)), end='')
 
     print('')
 
