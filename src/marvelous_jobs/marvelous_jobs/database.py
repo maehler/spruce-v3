@@ -91,6 +91,19 @@ class marvel_db:
                         (id1, id2, priority, 1 if use_masking_server else 0))
         self._db.commit()
 
+    def add_daligner_jobs(self, jobs):
+        query = '''INSERT INTO daligner_job
+                (block_id1, block_id2, priority, use_masking, last_update)
+                VALUES '''
+
+        for jtuple in jobs:
+            query += '(?, ?, ?, ?, datetime("now", "localtime")),'
+
+        query = query.rstrip(',')
+
+        self._c.execute(query, tuple(y for x in jobs for y in x))
+        self._db.commit()
+
     def any_using_masking(self):
         self._c.execute('SELECT COUNT(*) FROM daligner_job WHERE use_masking = 1')
         return self._c.fetchone()[0] > 0
@@ -102,20 +115,17 @@ class marvel_db:
                         (jobid, id1, id2))
         self._db.commit()
 
-    def update_daligner_job_status(self):
-        self._c.execute('SELECT jobid FROM daligner_job')
-
-        for (jobid,) in self._c.fetchall():
-            status = slurm_utils.get_job_status(jobid)
-            self._c.execute('''UPDATE daligner_job
-                                SET status = ?
-                                WHERE jobid = ?''',
-                           (status, jobid))
-
+    def update_daligner_job_status(self, jobid):
+        status = slurm_utils.get_job_status(jobid)
+        self._c.execute('UPDATE daligner_job SET status = ? WHERE jobid = ?',
+                        (status, jobid))
         self._db.commit()
 
-    def get_daligner_jobs(self, max_jobs=None, status=()):
-        query = 'SELECT jobid, block_id1, block_id2, use_masking FROM daligner_job'
+    def get_daligner_jobs(self, max_jobs=None, status=(), jobid_only=False):
+        if jobid_only:
+            query = 'SELECT jobid FROM daligner_job'
+        else:
+            query = 'SELECT jobid, block_id1, block_id2, use_masking FROM daligner_job'
         if type(status) is not str and len(status) > 0:
             query += ' WHERE '
             for i in range(len(status) - 1):
@@ -133,7 +143,10 @@ class marvel_db:
         self._c.execute(query, args)
         jobs = []
         for j in self._c.fetchall():
-            jobs.append(daligner_job(j[1], j[2], use_masking_server=j[3], jobid=j[0]))
+            if jobid_only:
+                jobs.append(j[0])
+            else:
+                jobs.append(daligner_job(j[1], j[2], use_masking_server=j[3], jobid=j[0]))
 
         return jobs
 

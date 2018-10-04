@@ -134,7 +134,10 @@ def start_daligner(force=False, no_masking=False):
     print('Adding daligner jobs to database: ', end='')
 
     total_n_jobs = int(n_blocks + ((n_blocks - 1) * n_blocks) / 2)
-    current_job = 1
+    current_job = 0
+
+    n_jobs = 5000
+    jobchunk = []
 
     for i in range(1, n_blocks + 1):
         block_name = '{0}.{1}'.format(projname, i)
@@ -143,15 +146,25 @@ def start_daligner(force=False, no_masking=False):
         except RuntimeError as rte:
             print('error: {0}, use --force to override'.format(rte), file=sys.stderr)
             exit(1)
-        db.add_daligner_job(i, i, 1, not no_masking)
-        print('\rAdding daligner jobs to database: {0}/{1}'.format(current_job, total_n_jobs), end='')
         current_job += 1
+        jobchunk.append((i, i, 1, not no_masking))
+        if current_job % n_jobs == 0:
+            db.add_daligner_jobs(jobchunk)
+            jobchunk = []
+            print('\rAdding daligner jobs to database: {0}/{1}'.format(current_job, total_n_jobs), end='')
 
     for i in range(1, n_blocks + 1):
         for j in range(i + 1, n_blocks + 1):
-            db.add_daligner_job(i, j, i + 1, not no_masking)
-            print('\rAdding daligner jobs to database: {0}/{1}'.format(current_job, total_n_jobs), end='')
             current_job += 1
+            jobchunk.append((i, j, i + 1, not no_masking))
+            if current_job % n_jobs == 0:
+                db.add_daligner_jobs(jobchunk)
+                jobchunk = []
+                print('\rAdding daligner jobs to database: {0}/{1}'.format(current_job, total_n_jobs), end='')
+
+    if len(jobchunk) > 0:
+        db.add_daligner_jobs(jobchunk)
+        print('\rAdding daligner jobs to database: {0}/{1}'.format(current_job, total_n_jobs), end='')
 
     print()
 
@@ -179,6 +192,7 @@ def update_daligner_queue():
     for i, dj in enumerate(jobs_to_queue, start=1):
         jobid = dj.start()
         db.update_daligner_job_id(dj.block_id1, dj.block_id2, jobid)
+        db.update_daligner_job_status(jobid)
         print('\rQueuing jobs: {0}/{1}'.format(i, len(jobs_to_queue)), end='')
 
     print()
@@ -324,11 +338,13 @@ def update_and_restart():
                               slurm_utils.status.completing):
             dj.start()
             db.update_daligner_job_id(dj.block_id1, dj.block_id2, dj.jobid)
+            db.update_daligner_job_status(dj.jobid)
         if job_status == slurm_utils.status.pending \
                 and masking_ip_changed:
             dj.cancel()
             dj.start()
             db.update_daligner_job_id(dj.block_id1, dj.block_id2, dj.jobid)
+            db.update_daligner_job_status(dj.jobid)
 
     update_statuses()
 
@@ -347,7 +363,16 @@ def update_statuses():
     if not db.is_prepared() and prepare_status == slurm_utils.status.completed:
         db.prepare()
 
-    db.update_daligner_job_status()
+    # Update status of jobs that have been submitted but not failed or
+    # completed, i.e. their job state is one of CONFIGURING, RUNNING,
+    # PENDING, or COMPLETING
+    dj_ids = db.get_daligner_jobs(status=(slurm_utils.status.pending,
+                                          slurm_utils.status.configuring,
+                                          slurm_utils.status.running,
+                                          slurm_utils.status.completing,),
+                                  jobid_only=True)
+    for jobid in dj_ids:
+        db.update_daligner_job_status(jobid)
 
 # Helper functions for the argument parsing
 def directory_exists(s):

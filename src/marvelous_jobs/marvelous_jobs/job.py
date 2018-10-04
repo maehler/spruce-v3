@@ -93,15 +93,17 @@ class prepare_job(marvel_job):
 
 class daligner_job(marvel_job):
 
-    def __init__(self, block_id1, block_id2, use_masking_server=False, jobid=None, **kwargs):
+    def __init__(self, block_id1, block_id2, use_masking_server=False, jobid=None):
         config = mj.marvelous_config()
         db = mj.marvel_db.from_file(config.get('general', 'database'))
 
         self.use_masking_server = use_masking_server
         if use_masking_server:
             masking_ip = db.get_masking_ip()
+            masking_jobid = db.get_masking_jobid()
         else:
             masking_ip = None
+            masking_jobid = None
 
         self.block_id1 = block_id1
         self.block_id2 = block_id2
@@ -140,7 +142,7 @@ class daligner_job(marvel_job):
                          'daligner.sh',
                          timelimit=config.get('daligner', 'timelimit'),
                          jobid=jobid, cores=config.get('daligner', 'threads'),
-                         **kwargs)
+                         after=masking_jobid)
 
     def start(self):
         return super().start(str(self.block_id1), str(self.block_id2))
