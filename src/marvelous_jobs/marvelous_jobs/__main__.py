@@ -169,7 +169,6 @@ def update_daligner_queue():
                                      slurm_utils.status.configuring)
 
     if db.any_using_masking():
-        print('using masking')
         queued_jobs += 1
 
     print('Queuing jobs: {0}/{1}'.format(queued_jobs, max_jobs), end='')
