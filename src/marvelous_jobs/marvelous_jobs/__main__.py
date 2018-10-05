@@ -212,7 +212,7 @@ def stop_daligner(status=(slurm_utils.status.running,
 
     print('')
 
-def start_mask(node=None, threads=4, port=12345):
+def start_mask(node=None, threads=4, port=12345, constraint=None):
     config = mc()
     db = get_database()
 
@@ -220,6 +220,7 @@ def start_mask(node=None, threads=4, port=12345):
 
     config.set('DMserver', 'threads', threads)
     config.set('DMserver', 'port', port)
+    config.set('DMserver', 'constraint', constraint)
 
     if masking_status is not None \
        and masking_status[1] in (slurm_utils.status.running,
@@ -437,6 +438,7 @@ def parse_args():
     mask_start = mask_subparsers.add_parser('start', help='start masking server')
     mask_start.add_argument('-w', '--node', help='node where to run the '
                             'process', required=True)
+    mask_start.add_argument('-C', '--constraint', help='node constraint')
     mask_start.add_argument('-t', '--threads', help='number of worker threads '
                             '(default: 4)',
                             type=int, default=4)
@@ -505,7 +507,7 @@ def main():
                 log_directory=args.log_directory,
                 force=args.force)
     if args.subcommand == 'mask' and args.subsubcommand == 'start':
-        start_mask(args.node, args.threads, args.port)
+        start_mask(args.node, args.threads, args.port, args.constraint)
     if args.subcommand == 'mask' and args.subsubcommand == 'status':
         mask_status()
     if args.subcommand == 'mask' and args.subsubcommand == 'stop':

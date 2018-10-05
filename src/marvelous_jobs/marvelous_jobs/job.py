@@ -66,6 +66,8 @@ class marvel_job:
                         if self.account is not None else '',
                      '#SBATCH -w {0}'.format(self.sbatch_args.get('node')) \
                         if self.sbatch_args.get('node') is not None else '',
+                     '#SBATCH -C {0}'.format(self.sbatch_args.get('constraint')) \
+                        if self.sbatch_args.get('node') is not None else '',
                      '#SBATCH -t {0}'.format(self.sbatch_args.get('timelimit')) \
                         if self.sbatch_args.get('timelimit') is not None else '',
                      '#SBATCH -p {0}'.format(self.sbatch_args.get('partition')) \
@@ -161,12 +163,15 @@ class masking_server_job(marvel_job):
             name, str(coverage)
         ]
         self.node = node
+        self.constraint = config.get('DMserver', 'constraint')
         self.ip = mj.slurm_utils.get_node_ip(node)
         super().__init__(args,
                          jobname, 'marvel_masking.sh',
                          jobid=jobid, node=node,
                          timelimit=config.get('DMserver', 'timelimit'),
-                         partition='node')
+                         partition='node',
+                         cores=1,
+                         constraint=self.constraint)
 
     def stop(self):
         dmctl = os.path.join(marvel.config.PATH_BIN, 'DMctl')
