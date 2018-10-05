@@ -1,3 +1,4 @@
+from functools import reduce
 import os
 import sqlite3
 
@@ -108,24 +109,36 @@ class marvel_db:
         self._c.execute('SELECT COUNT(*) FROM daligner_job WHERE use_masking = 1')
         return self._c.fetchone()[0] > 0
 
-    def update_daligner_job_id(self, id1, id2, jobid):
-        self._c.execute('''UPDATE daligner_job
-                            SET jobid = ?
-                            WHERE block_id1 = ? AND block_id2 = ?''',
-                        (jobid, id1, id2))
-        self._db.commit()
+    def update_daligner_job(self, jobs):
+        if type(jobs) is not list:
+            jobs = [jobs]
 
-    def update_daligner_job_status(self, jobid):
-        status = slurm_utils.get_job_status(jobid)
-        self._c.execute('UPDATE daligner_job SET status = ? WHERE jobid = ?',
-                        (status, jobid))
+        if len(jobs) == 0:
+            return
+
+        statuses = {x.jobid: slurm_utils.get_job_status(x.jobid) for x in jobs}
+
+        query = '''REPLACE INTO daligner_job
+                (block_id1, block_id2, priority, status,
+                 use_masking, jobid, last_update) VALUES '''
+
+        for j in jobs:
+            query += '(?, ?, ?, ?, ?, ?, datetime("now", "localtime")),'
+
+        query = query.rstrip(',')
+
+        args = tuple(reduce((lambda x, y: x + y),
+                     [[x.block_id1, x.block_id2, x.priority, statuses[x.jobid],
+                       x.use_masking_server, x.jobid] for x in jobs]))
+
+        self._c.execute(query, args)
         self._db.commit()
 
     def get_daligner_jobs(self, max_jobs=None, status=(), jobid_only=False):
         if jobid_only:
             query = 'SELECT jobid FROM daligner_job'
         else:
-            query = 'SELECT jobid, block_id1, block_id2, use_masking, status FROM daligner_job'
+            query = 'SELECT jobid, block_id1, block_id2, use_masking, priority, status FROM daligner_job'
         if type(status) is not str and len(status) > 0:
             query += ' WHERE '
             for i in range(len(status) - 1):
@@ -147,7 +160,7 @@ class marvel_db:
                 jobs.append(j[0])
             else:
                 jobs.append(daligner_job(j[1], j[2], use_masking_server=j[3],
-                                         jobid=j[0], status=j[4]))
+                                         jobid=j[0], priority=j[4], status=j[5]))
 
         return jobs
 

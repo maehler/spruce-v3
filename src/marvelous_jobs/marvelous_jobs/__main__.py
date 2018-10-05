@@ -190,10 +190,17 @@ def update_daligner_queue():
                                          slurm_utils.status.notstarted)
 
     for i, dj in enumerate(jobs_to_queue, start=1):
-        jobid = dj.start()
-        db.update_daligner_job_id(dj.block_id1, dj.block_id2, jobid)
-        db.update_daligner_job_status(jobid)
+        try:
+            jobid = dj.start()
+        except (RuntimeError, KeyboardInterrupt) as e:
+            print(e, file=sys.stderr)
+            print('Cleaning up...', file=sys.stderr)
+            db.update_daligner_job(jobs_to_queue)
+            sys.exit(1)
+
         print('\rQueuing jobs: {0}/{1}'.format(i, len(jobs_to_queue)), end='')
+
+    db.update_daligner_job(jobs_to_queue)
 
     print()
 
@@ -331,19 +338,23 @@ def update_and_restart():
     if masking_ip_changed:
         print('Masking server IP changed, also restarting pending jobs...')
 
-    for dj in db.get_daligner_jobs(status=(slurm_utils.status.failed,
-                                           slurm_utils.status.cancelled,
-                                           slurm_utils.status.timeout)):
-        if dj.status == slurm_utils.status.pending \
-                and masking_ip_changed:
-            dj.cancel()
+    failed_jobs = db.get_daligner_jobs(status=(slurm_utils.status.failed,
+                                               slurm_utils.status.cancelled,
+                                               slurm_utils.status.timeout))
+
+    if len(failed_jobs) > 0:
+        for dj in failed_jobs:
             dj.start()
-            db.update_daligner_job_id(dj.block_id1, dj.block_id2, dj.jobid)
-            db.update_daligner_job_status(dj.jobid)
-        else:
-            dj.start()
-            db.update_daligner_job_id(dj.block_id1, dj.block_id2, dj.jobid)
-            db.update_daligner_job_status(dj.jobid)
+
+        db.update_daligner_job(failed_jobs)
+
+    if masking_ip_changed:
+        pending_jobs = db.get_daligner_jobs(status=(slurm_utils.status.pending))
+        if len(pending_jobs) > 0:
+            for dj in pending_jobs:
+                dj.cancel()
+                dj.start()
+            db.update_daligner_job(pending_jobs)
 
     update_statuses()
 
@@ -365,13 +376,11 @@ def update_statuses():
     # Update status of jobs that have been submitted but not failed or
     # completed, i.e. their job state is one of CONFIGURING, RUNNING,
     # PENDING, or COMPLETING
-    dj_ids = db.get_daligner_jobs(status=(slurm_utils.status.pending,
-                                          slurm_utils.status.configuring,
-                                          slurm_utils.status.running,
-                                          slurm_utils.status.completing,),
-                                  jobid_only=True)
-    for jobid in dj_ids:
-        db.update_daligner_job_status(jobid)
+    djs = db.get_daligner_jobs(status=(slurm_utils.status.pending,
+                                       slurm_utils.status.configuring,
+                                       slurm_utils.status.running,
+                                       slurm_utils.status.completing))
+    db.update_daligner_job(djs)
 
 # Helper functions for the argument parsing
 def directory_exists(s):
