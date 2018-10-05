@@ -95,10 +95,12 @@ class prepare_job(marvel_job):
 
 class daligner_job(marvel_job):
 
-    def __init__(self, block_id1, block_id2, use_masking_server=False, jobid=None):
+    def __init__(self, block_id1, block_id2, use_masking_server=False,
+                 jobid=None, status=None):
         config = mj.marvelous_config()
         db = mj.marvel_db.from_file(config.get('general', 'database'))
 
+        self.status = status
         self.use_masking_server = use_masking_server
         if use_masking_server:
             masking_ip = db.get_masking_ip()

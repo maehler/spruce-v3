@@ -125,7 +125,7 @@ class marvel_db:
         if jobid_only:
             query = 'SELECT jobid FROM daligner_job'
         else:
-            query = 'SELECT jobid, block_id1, block_id2, use_masking FROM daligner_job'
+            query = 'SELECT jobid, block_id1, block_id2, use_masking, status FROM daligner_job'
         if type(status) is not str and len(status) > 0:
             query += ' WHERE '
             for i in range(len(status) - 1):
@@ -146,7 +146,8 @@ class marvel_db:
             if jobid_only:
                 jobs.append(j[0])
             else:
-                jobs.append(daligner_job(j[1], j[2], use_masking_server=j[3], jobid=j[0]))
+                jobs.append(daligner_job(j[1], j[2], use_masking_server=j[3],
+                                         jobid=j[0], status=j[4]))
 
         return jobs
 
