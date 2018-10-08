@@ -163,7 +163,8 @@ class masking_server_job(marvel_job):
             os.path.join(marvel.config.PATH_BIN, 'DMserver'),
             '-t', config.get('DMserver', 'threads'),
             '-p', config.get('DMserver', 'port'),
-            name, str(coverage)
+            name, str(coverage),
+            config.get('DMserver', 'checkpoint_file')
         ]
         self.node = node
         self.constraint = config.get('DMserver', 'constraint')

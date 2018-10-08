@@ -228,6 +228,9 @@ def start_mask(node=None, threads=4, port=12345, constraint=None):
     config.set('DMserver', 'threads', threads)
     config.set('DMserver', 'port', port)
     config.set('DMserver', 'constraint', constraint)
+    config.set('DMserver', 'checkpoint_file',
+               os.path.join(config.get('general', 'directory'),
+                            'masking_checkpoint'))
 
     if masking_status is not None \
        and masking_status[1] in (slurm_utils.status.running,
