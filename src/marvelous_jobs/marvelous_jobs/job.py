@@ -41,7 +41,8 @@ class marvel_job:
                 f.write(str_script)
 
     def start(self, *args):
-        self.save_script()
+        if not os.path.isfile(self.filename):
+            self.save_script()
         p = Popen(['sbatch',
                    '-o', self.logfile,
                    '-J', self.jobname,
@@ -83,6 +84,8 @@ class marvel_job:
 
 class prepare_job(marvel_job):
 
+    filename = 'marvel_prepare.sh'
+
     def __init__(self, name, fasta):
         config = mj.marvelous_config()
         args = [os.path.join(marvel.config.PATH_SCRIPTS, 'DBprepare.py'),
@@ -90,10 +93,12 @@ class prepare_job(marvel_job):
                 name, fasta]
         super().__init__(args,
                          'marvel_prepare',
-                         'marvel_prepare.sh',
+                         prepare_job.filename,
                          timelimit='1-00:00:00')
 
 class daligner_job(marvel_job):
+
+    filename = 'daligner.sh'
 
     def __init__(self, block_id1, block_id2, use_masking_server=False,
                  jobid=None, priority=None, status=None):
@@ -152,7 +157,7 @@ class daligner_job(marvel_job):
 
         super().__init__(mask_ip_args + [daligner_args] + gzip_args,
                          jobname,
-                         'daligner.sh',
+                         daligner_job.filename,
                          timelimit=config.get('daligner', 'timelimit'),
                          jobid=jobid, cores=config.get('daligner', 'threads'),
                          after=masking_jobid)
@@ -161,6 +166,8 @@ class daligner_job(marvel_job):
         return super().start(str(self.block_id1), str(self.block_id2))
 
 class masking_server_job(marvel_job):
+
+    filename = 'marvel_masking.sh'
 
     def __init__(self, name, coverage, jobid=None):
         config = mj.marvelous_config()
@@ -181,7 +188,8 @@ class masking_server_job(marvel_job):
             if node is not None:
                 self.ip = mj.slurm_utils.get_node_ip(node)
         super().__init__(args,
-                         jobname, 'marvel_masking.sh',
+                         jobname,
+                         masking_server_job.filename,
                          jobid=jobid,
                          timelimit=config.get('DMserver', 'timelimit'),
                          partition='node',

@@ -131,6 +131,9 @@ def start_daligner(force=False, no_masking=False):
         db.remove_blocks()
         stop_daligner()
         db.remove_daligner_jobs()
+        os.remove(os.path.join(config.get('general',
+                                          'script_directory'),
+                               daligner_job.filename))
 
     print('Adding daligner jobs to database: ', end='')
 
