@@ -1,6 +1,7 @@
 from functools import reduce
 import os
 import sqlite3
+import time
 
 from marvelous_jobs import slurm_utils
 from marvelous_jobs.job import daligner_job
@@ -116,7 +117,9 @@ class marvel_db:
         if len(jobs) == 0:
             return
 
+        start = time.time()
         statuses = {x.jobid: slurm_utils.get_job_status(x.jobid) for x in jobs}
+        print('fetched status in {0}'.format(time.time() - start))
 
         query = '''REPLACE INTO daligner_job
                 (block_id1, block_id2, priority, status,
@@ -131,8 +134,10 @@ class marvel_db:
                      [[x.block_id1, x.block_id2, x.priority, statuses[x.jobid],
                        x.use_masking_server, x.jobid] for x in jobs]))
 
+        start = time.time()
         self._c.execute(query, args)
         self._db.commit()
+        print('updated database in {0}'.format(time.time() - start))
 
     def get_daligner_jobs(self, max_jobs=None, status=(), jobid_only=False):
         if jobid_only:

@@ -5,6 +5,7 @@ import os
 import queue
 from subprocess import Popen, PIPE
 import sys
+import time
 
 import marvelous_jobs as mj
 from marvelous_jobs import marvelous_config as mc
@@ -379,10 +380,12 @@ def update_statuses():
     # Update status of jobs that have been submitted but not failed or
     # completed, i.e. their job state is one of CONFIGURING, RUNNING,
     # PENDING, or COMPLETING
+    start = time.time()
     djs = db.get_daligner_jobs(status=(slurm_utils.status.pending,
                                        slurm_utils.status.configuring,
                                        slurm_utils.status.running,
                                        slurm_utils.status.completing))
+    print('fetched jobs in {0}'.format(time.time() - start))
     db.update_daligner_job(djs)
 
 # Helper functions for the argument parsing
