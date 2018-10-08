@@ -208,15 +208,16 @@ class marvel_db:
         return res[0]
 
     def has_masking_job(self):
-        self._c.execute('SELECT COUNT(node) FROM masking_job')
+        self._c.execute('SELECT COUNT(status) FROM masking_job')
         return self._c.fetchone()[0] > 0
 
     def add_masking_job(self, job):
         if self.has_masking_job():
             self._c.execute('DELETE FROM masking_job')
         self._c.execute('''INSERT INTO masking_job
-                        (node, ip, last_update)
-                        VALUES (?, ?, datetime('now', 'localtime'))''', (job.node, job.ip))
+                        (ip, last_update)
+                        VALUES (?, datetime('now', 'localtime'))''',
+                        (job.ip,))
         self._db.commit()
 
     def update_masking_job_id(self, jobid):
@@ -237,10 +238,14 @@ class marvel_db:
             job_status = slurm_utils.get_job_status(jobid)
         except ValueError:
             raise
+        node_ip = None
+        if job_status == slurm_utils.status.running:
+            node = slurm_utils.get_job_node(jobid)
+            node_ip = slurm_utils.get_node_ip(node)
         self._c.execute('''UPDATE masking_job
-                        SET status = ?, last_update = datetime('now',
+                        SET ip = ?, status = ?, last_update = datetime('now',
                         'localtime')''',
-                        (job_status,))
+                        (node_ip, job_status))
 
         self._db.commit()
 

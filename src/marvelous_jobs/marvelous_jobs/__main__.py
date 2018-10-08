@@ -220,10 +220,11 @@ def stop_daligner(status=(slurm_utils.status.running,
 
     print('')
 
-def start_mask(node=None, threads=4, port=12345, constraint=None):
+def start_mask(threads=4, port=12345, constraint=None):
     config = mc()
     db = get_database()
 
+    db.update_masking_job_status()
     masking_status = db.masking_status()
 
     config.set('DMserver', 'threads', threads)
@@ -241,8 +242,7 @@ def start_mask(node=None, threads=4, port=12345, constraint=None):
         sys.exit(1)
 
     job = masking_server_job(db.get_project_name(),
-                             db.get_coverage(),
-                             node)
+                             db.get_coverage())
     db.add_masking_job(job)
     job.save_script()
 
@@ -274,7 +274,6 @@ def stop_mask():
 
     job = masking_server_job(db.get_project_name(),
                              db.get_coverage(),
-                             db.get_masking_node(),
                              jobid=masking_status[0])
 
     print('Stopping masking server...')
@@ -332,7 +331,7 @@ def update_and_restart():
             and db.any_using_masking():
         print('Masking server is down, restarting...')
         stop_daligner(status=(slurm_utils.status.running,))
-        start_mask(node=db.get_masking_node())
+        start_mask()
 
     update_statuses()
 
@@ -449,8 +448,6 @@ def parse_args():
 
     # Start masking server
     mask_start = mask_subparsers.add_parser('start', help='start masking server')
-    mask_start.add_argument('-w', '--node', help='node where to run the '
-                            'process', required=True)
     mask_start.add_argument('-C', '--constraint', help='node constraint')
     mask_start.add_argument('-t', '--threads', help='number of worker threads '
                             '(default: 4)',
@@ -497,7 +494,6 @@ def parse_args():
             parser.error('number of threads must be a positive non-zero integer')
         if not positive_integer(args.port):
             parser.error('port must be a positive non-zero integer')
-        if args.node is not None and not slurm_utils.is_node(args.node):
             parser.error('{0} is not a valid node'.format(args.node))
 
     if args.subcommand is None:
@@ -520,7 +516,7 @@ def main():
                 log_directory=args.log_directory,
                 force=args.force)
     if args.subcommand == 'mask' and args.subsubcommand == 'start':
-        start_mask(args.node, args.threads, args.port, args.constraint)
+        start_mask(args.threads, args.port, args.constraint)
     if args.subcommand == 'mask' and args.subsubcommand == 'status':
         mask_status()
     if args.subcommand == 'mask' and args.subsubcommand == 'stop':

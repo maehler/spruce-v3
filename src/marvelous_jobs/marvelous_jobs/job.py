@@ -67,7 +67,7 @@ class marvel_job:
                      '#SBATCH -w {0}'.format(self.sbatch_args.get('node')) \
                         if self.sbatch_args.get('node') is not None else '',
                      '#SBATCH -C {0}'.format(self.sbatch_args.get('constraint')) \
-                        if self.sbatch_args.get('node') is not None else '',
+                        if self.sbatch_args.get('constraint') is not None else '',
                      '#SBATCH -t {0}'.format(self.sbatch_args.get('timelimit')) \
                         if self.sbatch_args.get('timelimit') is not None else '',
                      '#SBATCH -p {0}'.format(self.sbatch_args.get('partition')) \
@@ -104,10 +104,8 @@ class daligner_job(marvel_job):
         self.status = status
         self.use_masking_server = use_masking_server
         if use_masking_server:
-            masking_ip = db.get_masking_ip()
             masking_jobid = db.get_masking_jobid()
         else:
-            masking_ip = None
             masking_jobid = None
 
         self.block_id1 = block_id1
@@ -118,15 +116,25 @@ class daligner_job(marvel_job):
         block2 = '{0}.{1}'.format(project_name, self.block_id2)
         jobname = '{0}.{1}.dalign'.format(block1, block2)
 
+        mask_ip_args = [
+            ['maskip=$(sqlite3 {} "SELECT ip FROM masking_job")' \
+                .format(config.get('general', 'database'))],
+            ['if [[ {0} = true ]] && [[ -z $maskip ]]; then' \
+                .format('true' if use_masking_server else 'false')],
+            ['\techo >&2 "error: no masking server available"'],
+            ['\texit 1'],
+            ['fi']
+        ]
+
         daligner_args = [
             os.path.join(marvel.config.PATH_BIN, 'daligner'),
             '-v' if config.getboolean('daligner', 'verbose') else '',
             '-I' if config.getboolean('daligner', 'identity') else '',
             '-t', config.get('daligner', 'tuple_suppression_frequency'),
             '-e', config.get('daligner', 'correlation_rate'),
-            '-D' if masking_ip is not None else '',
-            '{0}:{1}'.format(masking_ip, config.get('DMserver', 'port')) \
-                if masking_ip is not None else '',
+            '-D' if use_masking_server else '',
+            '${{maskip}}:{0}'.format(config.get('DMserver', 'port')) \
+                if use_masking_server else '',
             '-j', config.get('daligner', 'threads'),
             '"{0}.$1"'.format(project_name), '"{0}.$2"'.format(project_name)
         ]
@@ -142,7 +150,7 @@ class daligner_job(marvel_job):
             ['fi']
         ]
 
-        super().__init__([daligner_args] + gzip_args,
+        super().__init__(mask_ip_args + [daligner_args] + gzip_args,
                          jobname,
                          'daligner.sh',
                          timelimit=config.get('daligner', 'timelimit'),
@@ -154,7 +162,7 @@ class daligner_job(marvel_job):
 
 class masking_server_job(marvel_job):
 
-    def __init__(self, name, coverage, node, jobid=None):
+    def __init__(self, name, coverage, jobid=None):
         config = mj.marvelous_config()
         jobname = 'marvel_masking'
         self.port = config.getint('DMserver', 'port')
@@ -166,12 +174,15 @@ class masking_server_job(marvel_job):
             name, str(coverage),
             config.get('DMserver', 'checkpoint_file')
         ]
-        self.node = node
         self.constraint = config.get('DMserver', 'constraint')
-        self.ip = mj.slurm_utils.get_node_ip(node)
+        self.ip = None
+        if jobid is not None:
+            node = mj.slurm_utils.get_job_node(jobid)
+            if node is not None:
+                self.ip = mj.slurm_utils.get_node_ip(node)
         super().__init__(args,
                          jobname, 'marvel_masking.sh',
-                         jobid=jobid, node=node,
+                         jobid=jobid,
                          timelimit=config.get('DMserver', 'timelimit'),
                          partition='node',
                          cores=1,
