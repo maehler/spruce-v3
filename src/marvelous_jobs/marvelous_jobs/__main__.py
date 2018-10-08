@@ -193,16 +193,15 @@ def update_daligner_queue():
     jobs_to_queue = db.get_daligner_jobs(max_jobs - queued_jobs,
                                          slurm_utils.status.notstarted)
 
-    for i, dj in enumerate(jobs_to_queue, start=1):
-        try:
+    try:
+        for i, dj in enumerate(jobs_to_queue, start=1):
             jobid = dj.start()
-        except (RuntimeError, KeyboardInterrupt) as e:
-            print(e, file=sys.stderr)
-            print('Cleaning up...', file=sys.stderr)
-            db.update_daligner_job(jobs_to_queue)
-            sys.exit(1)
-
-        print('\rQueuing jobs: {0}/{1}'.format(i, len(jobs_to_queue)), end='')
+            print('\rQueuing jobs: {0}/{1}'.format(i, len(jobs_to_queue)), end='')
+    except (RuntimeError, KeyboardInterrupt) as e:
+        print(e, file=sys.stderr)
+        print('Cleaning up...', file=sys.stderr)
+        db.update_daligner_job(jobs_to_queue)
+        sys.exit(1)
 
     db.update_daligner_job(jobs_to_queue)
 
@@ -357,9 +356,15 @@ def update_and_restart():
     if masking_ip_changed:
         pending_jobs = db.get_daligner_jobs(status=(slurm_utils.status.pending))
         if len(pending_jobs) > 0:
-            for dj in pending_jobs:
-                dj.cancel()
-                dj.start()
+            try:
+                for dj in pending_jobs:
+                    dj.cancel()
+                    dj.start()
+            except (RuntimeError, KeyboardInterrupt) as e:
+                print(e, file=sys.stderr)
+                print('Cleaning up...', file=sys.stderr)
+                db.update_daligner_job(jobs_to_queue)
+                sys.exit(1)
             db.update_daligner_job(pending_jobs)
 
     update_statuses()
