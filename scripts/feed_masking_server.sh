@@ -29,13 +29,12 @@ if ! type pigz >/dev/null 2>&1; then
 fi
 
 # The masking server wants uncompressed files
-find $dir -type f -name "*.las.gz" | xargs -n 500 pigz -d -p 8
+echo "Uncompressing files..."
+find $dir -type f -name "*.las.gz" | xargs pigz -d -p 8
 
 # Find the directories where the files are located and
 # feed these to the masking server
+echo "Feeding alignments to masking server..."
 find $dir -type f -name "*.las" -exec dirname {} \; | \
     sort -u | \
     xargs -n1 DMctl -h $host -p $port done
-
-# Compress alignments again
-find $dir -type f -name "*.las" | xargs -n 500 pigz -p 8

@@ -155,7 +155,7 @@ class daligner_job(marvel_job):
             ['fi']
         ]
 
-        super().__init__(mask_ip_args + [daligner_args] + gzip_args,
+        super().__init__(mask_ip_args + [daligner_args],
                          jobname,
                          daligner_job.filename,
                          timelimit=config.get('daligner', 'timelimit'),
