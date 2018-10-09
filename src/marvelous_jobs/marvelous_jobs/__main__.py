@@ -151,7 +151,7 @@ def start_daligner(force=False, no_masking=False):
             print('error: {0}, use --force to override'.format(rte), file=sys.stderr)
             exit(1)
         current_job += 1
-        jobchunk.append((i, i, 1, not no_masking))
+        jobchunk.append((current_job, i, i, 1, not no_masking))
         if current_job % n_jobs == 0:
             db.add_daligner_jobs(jobchunk)
             jobchunk = []
@@ -160,7 +160,7 @@ def start_daligner(force=False, no_masking=False):
     for i in range(1, n_blocks + 1):
         for j in range(i + 1, n_blocks + 1):
             current_job += 1
-            jobchunk.append((i, j, i + 1, not no_masking))
+            jobchunk.append((current_job, i, j, i + 1, not no_masking))
             if current_job % n_jobs == 0:
                 db.add_daligner_jobs(jobchunk)
                 jobchunk = []

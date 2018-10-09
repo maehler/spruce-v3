@@ -86,20 +86,20 @@ class marvel_db:
             raise RuntimeError('block already exists')
         self._db.commit()
 
-    def add_daligner_job(self, id1, id2, priority, use_masking_server=True):
+    def add_daligner_job(self, rowid, id1, id2, priority, use_masking_server=True):
         self._c.execute('''INSERT INTO daligner_job
-                        (block_id1, block_id2, priority, use_masking, last_update)
-                        VALUES (?, ?, ?, ?, datetime('now', 'localtime'))''',
-                        (id1, id2, priority, 1 if use_masking_server else 0))
+                        (rowid, block_id1, block_id2, priority, use_masking, last_update)
+                        VALUES (?, ?, ?, ?, ?, datetime('now', 'localtime'))''',
+                        (rowid, id1, id2, priority, 1 if use_masking_server else 0))
         self._db.commit()
 
     def add_daligner_jobs(self, jobs):
         query = '''INSERT INTO daligner_job
-                (block_id1, block_id2, priority, use_masking, last_update)
+                (rowid, block_id1, block_id2, priority, use_masking, last_update)
                 VALUES '''
 
         for jtuple in jobs:
-            query += '(?, ?, ?, ?, datetime("now", "localtime")),'
+            query += '(?, ?, ?, ?, ?, datetime("now", "localtime")),'
 
         query = query.rstrip(',')
 
@@ -122,16 +122,16 @@ class marvel_db:
         print('fetched status in {0}'.format(time.time() - start))
 
         query = '''REPLACE INTO daligner_job
-                (block_id1, block_id2, priority, status,
+                (rowid, block_id1, block_id2, priority, status,
                  use_masking, jobid, last_update) VALUES '''
 
         for j in jobs:
-            query += '(?, ?, ?, ?, ?, ?, datetime("now", "localtime")),'
+            query += '(?, ?, ?, ?, ?, ?, ?, datetime("now", "localtime")),'
 
         query = query.rstrip(',')
 
         args = tuple(reduce((lambda x, y: x + y),
-                     [[x.block_id1, x.block_id2, x.priority, statuses[x.jobid],
+                     [[x.rowid, x.block_id1, x.block_id2, x.priority, statuses[x.jobid],
                        x.use_masking_server, x.jobid] for x in jobs]))
 
         start = time.time()
@@ -143,7 +143,7 @@ class marvel_db:
         if jobid_only:
             query = 'SELECT jobid FROM daligner_job'
         else:
-            query = 'SELECT jobid, block_id1, block_id2, use_masking, priority, status FROM daligner_job'
+            query = 'SELECT rowid, jobid, block_id1, block_id2, use_masking, priority, status FROM daligner_job'
         if type(status) is not str and len(status) > 0:
             query += ' WHERE '
             for i in range(len(status) - 1):
@@ -164,8 +164,8 @@ class marvel_db:
             if jobid_only:
                 jobs.append(j[0])
             else:
-                jobs.append(daligner_job(j[1], j[2], use_masking_server=j[3],
-                                         jobid=j[0], priority=j[4], status=j[5]))
+                jobs.append(daligner_job(j[0], j[2], j[3], use_masking_server=j[4],
+                                         jobid=j[1], priority=j[5], status=j[6]))
 
         return jobs
 

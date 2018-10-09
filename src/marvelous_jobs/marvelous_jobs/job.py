@@ -100,11 +100,12 @@ class daligner_job(marvel_job):
 
     filename = 'daligner.sh'
 
-    def __init__(self, block_id1, block_id2, use_masking_server=False,
+    def __init__(self, rowid, block_id1, block_id2, use_masking_server=False,
                  jobid=None, priority=None, status=None):
         config = mj.marvelous_config()
         db = mj.marvel_db.from_file(config.get('general', 'database'))
 
+        self.rowid = rowid
         self.priority = priority
         self.status = status
         self.use_masking_server = use_masking_server
