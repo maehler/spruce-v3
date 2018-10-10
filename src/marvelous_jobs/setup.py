@@ -15,6 +15,9 @@ setup(
         'pyslurm'
     ],
 
+    test_suite='nose.collector',
+    tests_require=['nose'],
+
     author='Niklas Mähler',
     author_email='niklas.mahler@gmail.com',
     description='Job manager for the MARVEL assembler',
