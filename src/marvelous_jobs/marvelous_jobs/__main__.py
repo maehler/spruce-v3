@@ -472,6 +472,8 @@ def parse_args():
                                'and start jobs that have not yet been started '
                                'if there is room for them',
                                action='store_true')
+    dalign_parser.add_argument('--stop', help='cancel all pending and running '
+                               'daligner jobs', action='store_true')
     dalign_parser.add_argument('-f', '--force', help='forcefully add daligner '
                                'jobs, removing any existing jobs',
                                action='store_true')
@@ -532,6 +534,8 @@ def main():
     if args.subcommand == 'daligner':
         if args.update:
             update_daligner_queue()
+        elif args.stop:
+            stop_daligner()
         else:
             start_daligner(args.force, args.no_masking)
     if args.subcommand == 'fix':
