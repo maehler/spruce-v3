@@ -7,16 +7,17 @@ import marvelous_jobs as mj
 
 class marvel_job:
 
-    def __init__(self, args, jobname, filename, jobid=None, **kwargs):
+    def __init__(self, args, jobname, filename,
+                 log_filename=None, account=None,
+                 jobid=None, **kwargs):
         config = mj.marvelous_config()
         self.sbatch_args = kwargs
         self.args = args
         self.jobname = jobname
         self.jobid = jobid
-        self.account = config.get('general', 'account')
-        self.filename = os.path.join(config.get('general', 'script_directory'), filename)
-        self.logfile = os.path.join(config.get('general', 'log_directory'),
-                                    '{0}.log'.format(self.jobname))
+        self.account = account
+        self.filename = filename
+        self.logfile = log_filename
 
         if type(self.args[0]) is not list:
             self.args = [self.args]
@@ -96,75 +97,81 @@ class prepare_job(marvel_job):
                          prepare_job.filename,
                          timelimit='1-00:00:00')
 
+class daligner_job_array(marvel_job):
+
+    filename = 'daligner_array.sh'
+
+    def __init__(self, rowids, database_filename, account=None,
+                 ):
+        args = [
+            ['block1=$(sqlite3 {0} "SELECT block_id1 '
+             'FROM daligner_job WHERE rowid = $SLURM_ARRAY_TASK_ID")'],
+            ['block2=$(sqlite3 {0} "SELECT block_id2 '
+             'FROM daligner_job WHERE rowid = $SLURM_ARRAY_TASK_ID")']
+        ]
+
+        super().__init__(args, 'daligner_array', daligner_job_array.filename)
+
 class daligner_job(marvel_job):
 
     filename = 'daligner.sh'
 
-    def __init__(self, rowid, block_id1, block_id2, use_masking_server=False,
-                 jobid=None, priority=None, status=None):
-        config = mj.marvelous_config()
-        db = mj.marvel_db.from_file(config.get('general', 'database'))
-
+    def __init__(self, rowid, database_filename, script_directory=None,
+                 masking_jobid=None, masking_port=None, jobid=None,
+                 priority=None, status=None, timelimit='1:00:00',
+                 verbose=True, identity=True, tuple_suppression_frequency=20,
+                 correlation_rate=0.7, threads=4):
         self.rowid = rowid
         self.priority = priority
         self.status = status
-        self.use_masking_server = use_masking_server
-        if use_masking_server:
-            masking_jobid = db.get_masking_jobid()
+        self.use_masking_server = masking_jobid is not None
+        if script_directory is None:
+            self.filename = daligner_job.filename
         else:
-            masking_jobid = None
+            self.filename = os.path.join(script_directory,
+                                         daligner_job.filename)
 
-        self.block_id1 = block_id1
-        self.block_id2 = block_id2
-
-        project_name = db.get_project_name()
-        block1 = '{0}.{1}'.format(project_name, self.block_id1)
-        block2 = '{0}.{1}'.format(project_name, self.block_id2)
-        jobname = '{0}.{1}.dalign'.format(block1, block2)
-
-        mask_ip_args = [
-            ['maskip=$(sqlite3 {} "SELECT ip FROM masking_job")' \
-                .format(config.get('general', 'database'))],
+        args = [
+            ['rowid=$1'],
+            ['project=$(sqlite3', database_filename,
+             '"SELECT name FROM project")'],
+            # Get block information
+            ['block1=$(sqlite3', database_filename,
+             '"SELECT block_id1 FROM daligner_job WHERE rowid = $rowid")'],
+            ['block2=$(sqlite3', database_filename,
+             '"SELECT block_id2 FROM daligner_job WHERE rowid = $rowid")'],
+            [],
+            # Masking server
+            ['maskip=$(sqlite3 {0} "SELECT ip FROM masking_job")' \
+                .format(database_filename)],
             ['if [[ {0} = true ]] && [[ -z $maskip ]]; then' \
-                .format('true' if use_masking_server else 'false')],
+                .format('true' if self.use_masking_server else 'false')],
             ['\techo >&2 "error: no masking server available"'],
             ['\texit 1'],
-            ['fi']
+            ['fi'],
+            [],
+            # daligner
+            [os.path.join(marvel.config.PATH_BIN, 'daligner'),
+             '-v' if verbose else '',
+             '-I' if identity else '',
+             '-t', str(tuple_suppression_frequency),
+             '-e', str(correlation_rate),
+             '-D' if self.use_masking_server else '',
+             '${{maskip}}:{0}'.format(masking_port) \
+                if self.use_masking_server else '',
+             '-j', str(threads),
+             '"${project}.${block1}"', '"${project}.${block2}"']
         ]
 
-        daligner_args = [
-            os.path.join(marvel.config.PATH_BIN, 'daligner'),
-            '-v' if config.getboolean('daligner', 'verbose') else '',
-            '-I' if config.getboolean('daligner', 'identity') else '',
-            '-t', config.get('daligner', 'tuple_suppression_frequency'),
-            '-e', config.get('daligner', 'correlation_rate'),
-            '-D' if use_masking_server else '',
-            '${{maskip}}:{0}'.format(config.get('DMserver', 'port')) \
-                if use_masking_server else '',
-            '-j', config.get('daligner', 'threads'),
-            '"{0}.$1"'.format(project_name), '"{0}.$2"'.format(project_name)
-        ]
-
-        gzip_args = [
-            ['gzip', '-f',
-             '{0}/d001_$(printf "%05d" $1)/{1}.$1.{1}.$2.las' \
-                .format(config.get('general', 'directory'), project_name)],
-            ['if [[ $1 != $2 ]]; then'],
-            ['\tgzip', '-f',
-             '{0}/d001_$(printf "%05d" $2)/{1}.$2.{1}.$1.las' \
-                .format(config.get('general', 'directory'), project_name)],
-            ['fi']
-        ]
-
-        super().__init__(mask_ip_args + [daligner_args],
-                         jobname,
-                         daligner_job.filename,
-                         timelimit=config.get('daligner', 'timelimit'),
-                         jobid=jobid, cores=config.get('daligner', 'threads'),
+        super().__init__(args,
+                         'daligner_{0}'.format(self.rowid),
+                         self.filename,
+                         timelimit=timelimit,
+                         jobid=jobid, cores=threads,
                          after=masking_jobid)
 
     def start(self):
-        return super().start(str(self.block_id1), str(self.block_id2))
+        return super().start(str(self.rowid))
 
 class masking_server_job(marvel_job):
 
