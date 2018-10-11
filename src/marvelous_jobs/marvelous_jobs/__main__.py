@@ -348,8 +348,14 @@ def update_and_restart():
                                                slurm_utils.status.timeout))
 
     if len(failed_jobs) > 0:
-        for dj in failed_jobs:
-            dj.start()
+        try:
+            for dj in failed_jobs:
+                dj.start()
+        except (RuntimeError, KeyboardInterrupt) as e:
+            print(e, file=sys.stderr)
+            print('Cleaning up...', file=sys.stderr)
+            db.update_daligner_job(failed_jobs)
+            sys.exit(1)
 
         db.update_daligner_job(failed_jobs)
 
@@ -363,7 +369,7 @@ def update_and_restart():
             except (RuntimeError, KeyboardInterrupt) as e:
                 print(e, file=sys.stderr)
                 print('Cleaning up...', file=sys.stderr)
-                db.update_daligner_job(jobs_to_queue)
+                db.update_daligner_job(pending_jobs)
                 sys.exit(1)
             db.update_daligner_job(pending_jobs)
 
