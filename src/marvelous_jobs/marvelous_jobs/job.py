@@ -42,15 +42,21 @@ class marvel_job:
             with open(self.filename, 'w') as f:
                 f.write(str_script)
 
-    def start(self, *args):
+    def start(self, dryrun=False, *args):
         if not os.path.isfile(self.filename):
             self.save_script()
-        p = Popen(['sbatch',
-                   '-o', self.logfile,
-                   '-J', self.jobname,
-                   self.filename,
-                   *args],
-                  shell=False, stdout=PIPE, stderr=PIPE)
+        run_args = ['sbatch',
+                    '--array' if 'array' in self.sbatch_args else '',
+                    self.sbatch_args.get('array') \
+                        if 'array' in self.sbatch_args else '',
+                    '-o' if self.logfile is not None else '',
+                    self.logfile if self.logfile is not None else '',
+                    '-J', self.jobname,
+                    self.filename,
+                    *args]
+        if dryrun:
+            return ' '.join(run_args)
+        p = Popen(run_args, shell=False, stdout=PIPE, stderr=PIPE)
         output = p.communicate()
         if len(output[1].strip()) > 0:
             raise RuntimeError(output[1].decode('utf-8'))
@@ -103,10 +109,10 @@ class daligner_job_array(marvel_job):
     filename = 'daligner_array.sh'
 
     def __init__(self, rowids, database_filename, script_directory=None,
-                 masking_jobid=None, masking_port=None, account=None,
-                 timelimit='1:00:00', verbose=True, identity=True,
-                 tuple_suppression_frequency=20, correlation_rate=0.7,
-                 threads=4):
+                 log_directory=None, masking_jobid=None, masking_port=None,
+                 account=None, timelimit='1:00:00', verbose=True,
+                 identity=True, tuple_suppression_frequency=20,
+                 correlation_rate=0.7, threads=4):
         self.rowids = rowids
         self.use_masking_server = masking_jobid is not None
         if script_directory is None:
@@ -114,6 +120,12 @@ class daligner_job_array(marvel_job):
         else:
             self.filename = os.path.join(script_directory,
                                          daligner_job_array.filename)
+        if log_directory is None:
+            self.logfile = '{0}_%J.log' \
+                    .format(os.path.splitext(daligner_job_array.filename)[0])
+        else:
+            self.logfile = os.path.join(log_directory, '{0}_%J.log' \
+                                        .format(os.path.splitext(daligner_job_array.filename)[0]))
 
         args = [
             ['project=$(sqlite3 {0} "SELECT name FROM project")' \
@@ -149,10 +161,12 @@ class daligner_job_array(marvel_job):
 
         super().__init__(args, 'daligner_array',
                          self.filename,
+                         log_filename=self.logfile,
                          timelimit=timelimit,
                          cores=threads,
                          after=masking_jobid,
-                         account=account)
+                         account=account,
+                         array=self.rowid_str())
 
     def rowid_str(self):
         id_groups = []

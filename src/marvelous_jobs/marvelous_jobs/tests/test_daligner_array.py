@@ -17,6 +17,7 @@ def test_array_script():
     assert_false(os.path.isfile(job.filename))
     job.save_script()
     assert_true(os.path.isfile(job.filename))
+    os.remove(job.filename)
 
 def test_array_simple_taskid():
     job = mj.daligner_job_array(range(1, 101),
@@ -31,3 +32,43 @@ def test_array_tricky_taskids():
                                 config.get('general', 'script_directory'))
     assert_equals(len(job.rowids), 10)
     assert_equals(job.rowid_str(), '1-2,6-8,10,12-15')
+
+def test_array_submit():
+    job = mj.daligner_job_array([1, 2, 6, 7, 8, 10, 12, 13, 14, 15],
+                                config.get('general', 'database'),
+                                config.get('general', 'script_directory'),
+                                log_directory=config.get('general',
+                                                         'log_directory'))
+    assert_false(os.path.isfile(job.filename))
+    cmd = job.start(dryrun=True)
+    assert_true(os.path.isfile(job.filename))
+    assert_true('-o {0}' \
+                .format(os.path.join(config.get('general',
+                                                'log_directory'),
+                                     'daligner_array_%J.log')) \
+                in cmd)
+
+    job = mj.daligner_job_array([1, 2, 6, 7, 8, 10, 12, 13, 14, 15],
+                                config.get('general', 'database'),
+                                config.get('general', 'script_directory'))
+    cmd = job.start(dryrun=True)
+    assert_true('-o daligner_array_%J.log' in cmd)
+    os.remove(job.filename)
+
+def test_file_creation():
+    job1 = mj.daligner_job_array([1, 2, 6, 7, 8, 10, 12, 13, 14, 15],
+                                 config.get('general', 'database'),
+                                 config.get('general', 'script_directory'),
+                                 log_directory=config.get('general',
+                                                          'log_directory'))
+    job1.start(dryrun=True)
+    modtime = os.path.getmtime(job1.filename)
+
+    job2 = mj.daligner_job_array(range(1, 101),
+                                 config.get('general', 'database'),
+                                 config.get('general', 'script_directory'))
+    job2.start(dryrun=True)
+    assert_equals(modtime, os.path.getmtime(job2.filename))
+
+    os.remove(job2.filename)
+    assert_false(os.path.exists(job1.filename))
