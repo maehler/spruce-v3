@@ -110,40 +110,35 @@ class marvel_db:
         self._c.execute('SELECT COUNT(*) FROM daligner_job WHERE use_masking = 1')
         return self._c.fetchone()[0] > 0
 
-    def update_daligner_job(self, jobs):
+    def update_daligner_jobs(self, jobs):
         if type(jobs) is not list:
             jobs = [jobs]
 
         if len(jobs) == 0:
             return
 
+        jobid_query = 'SELECT jobid FROM daligner_job WHERE rowid IN ({0})' \
+                .format(','.join('?' for x in jobs))
+        self._c.execute(jobid_query, tuple(jobs))
+        jobids = [x[0] for x in self._c.fetchall()]
+
         start = time.time()
-        statuses = {x.jobid: slurm_utils.get_job_status(x.jobid) for x in jobs}
+        statuses = {ri: slurm_utils.get_job_status(ji) \
+                    for ri, ji in zip(jobs, jobids)}
         print('fetched status in {0}'.format(time.time() - start))
 
-        query = '''REPLACE INTO daligner_job
-                (rowid, block_id1, block_id2, priority, status,
-                 use_masking, jobid, last_update) VALUES '''
-
-        for j in jobs:
-            query += '(?, ?, ?, ?, ?, ?, ?, datetime("now", "localtime")),'
-
-        query = query.rstrip(',')
-
-        args = tuple(reduce((lambda x, y: x + y),
-                     [[x.rowid, x.block_id1, x.block_id2, x.priority, statuses[x.jobid],
-                       x.use_masking_server, x.jobid] for x in jobs]))
+        query = '''UPDATE daligner_job
+            SET status = ?, last_update = datetime("now", "localtime")
+            WHERE rowid = ?'''
 
         start = time.time()
-        self._c.execute(query, args)
+        for ri, status in statuses.items():
+            self._c.execute(query, (status, ri))
         self._db.commit()
         print('updated database in {0}'.format(time.time() - start))
 
-    def get_daligner_jobs(self, max_jobs=None, status=(), jobid_only=False):
-        if jobid_only:
-            query = 'SELECT jobid FROM daligner_job'
-        else:
-            query = 'SELECT rowid, jobid, block_id1, block_id2, use_masking, priority, status FROM daligner_job'
+    def get_daligner_jobs(self, max_jobs=None, status=()):
+        query = 'SELECT rowid FROM daligner_job'
         if type(status) is not str and len(status) > 0:
             query += ' WHERE '
             for i in range(len(status) - 1):
@@ -159,15 +154,8 @@ class marvel_db:
         else:
             args = status
         self._c.execute(query, args)
-        jobs = []
-        for j in self._c.fetchall():
-            if jobid_only:
-                jobs.append(j[0])
-            else:
-                jobs.append(daligner_job(j[0], j[2], j[3], use_masking_server=j[4],
-                                         jobid=j[1], priority=j[5], status=j[6]))
 
-        return jobs
+        return [j[0] for j in self._c.fetchall()]
 
     def add_prepare_job(self):
         self._c.execute('''INSERT INTO prepare_job (last_update)
