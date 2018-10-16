@@ -20,7 +20,8 @@ os.mkdir(log_dir)
 db_filename = os.path.join(testdir, 'testdb')
 config_filename = os.path.join(testdir, 'config.ini')
 
-n_blocks = 10
+n_blocks = 500
+n_daligner_jobs = n_blocks + n_blocks * (n_blocks - 1) // 2
 db = mj.marvel_db(db_filename, 'test', 20)
 config = mj.marvelous_config(
     filename=config_filename,
@@ -65,6 +66,9 @@ def setup():
         for j in range(i + 1, n_blocks):
             current_job += 1
             jobs.append((current_job, i, j, 1, False))
+            if current_job % 1000 == 0:
+                db.add_daligner_jobs(jobs)
+                jobs = []
 
     db.add_daligner_jobs(jobs)
 
