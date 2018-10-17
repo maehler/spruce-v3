@@ -110,30 +110,45 @@ class marvel_db:
         self._c.execute('SELECT COUNT(*) FROM daligner_job WHERE use_masking = 1')
         return self._c.fetchone()[0] > 0
 
-    def update_daligner_jobs(self, rowids):
+    def get_daligner_jobids(self, rowids):
+        query = 'SELECT rowid, jobid FROM daligner_job WHERE rowid IN ({0})' \
+                .format(','.join('?' for x in rowids))
+        self._c.execute(query, tuple(rowids))
+        return {x[0]: '{0}_{1}'.format(x[1], x[0]) \
+                if x[1] is not None else None for x in self._c.fetchall()}
+
+    def update_daligner_jobs(self, rowids, jobid=None):
         if type(rowids) is not list:
             rowids = [rowids]
 
         if len(rowids) == 0:
             return
 
-        jobid_query = 'SELECT jobid FROM daligner_job WHERE rowid IN ({0})' \
-                .format(','.join('?' for x in rowids))
-        self._c.execute(jobid_query, tuple(rowids))
-        jobids = [x[0] for x in self._c.fetchall()]
+        jobids = self.get_daligner_jobids(rowids)
 
         start = time.time()
-        statuses = {ri: slurm_utils.get_job_status(ji) \
-                    for ri, ji in zip(rowids, jobids)}
+        statuses = {}
+        for ri, ji in jobids.items():
+            try:
+                statuses[ri] = slurm_utils.get_job_status(ji)
+            except ValueError:
+                statuses[ri] = slurm_utils.status.notstarted
         print('fetched status in {0}'.format(time.time() - start))
 
-        query = '''UPDATE daligner_job
-            SET status = ?, last_update = datetime("now", "localtime")
-            WHERE rowid = ?'''
+        query = 'UPDATE daligner_job SET'
+        if jobid is not None:
+            query += ' jobid = ?'
+        query += '''
+            status = ?,
+            last_update = datetime("now", "localtime")
+        WHERE rowid = ?'''
 
         start = time.time()
         for ri, status in statuses.items():
-            self._c.execute(query, (status, ri))
+            if jobid is None:
+                self._c.execute(query, (status, ri))
+            else:
+                self._c.execute(query, (jobids[ri], status, ri))
         self._db.commit()
         print('updated database in {0}'.format(time.time() - start))
 
