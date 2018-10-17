@@ -110,21 +110,21 @@ class marvel_db:
         self._c.execute('SELECT COUNT(*) FROM daligner_job WHERE use_masking = 1')
         return self._c.fetchone()[0] > 0
 
-    def update_daligner_jobs(self, jobs):
-        if type(jobs) is not list:
-            jobs = [jobs]
+    def update_daligner_jobs(self, rowids):
+        if type(rowids) is not list:
+            rowids = [rowids]
 
-        if len(jobs) == 0:
+        if len(rowids) == 0:
             return
 
         jobid_query = 'SELECT jobid FROM daligner_job WHERE rowid IN ({0})' \
-                .format(','.join('?' for x in jobs))
-        self._c.execute(jobid_query, tuple(jobs))
+                .format(','.join('?' for x in rowids))
+        self._c.execute(jobid_query, tuple(rowids))
         jobids = [x[0] for x in self._c.fetchall()]
 
         start = time.time()
         statuses = {ri: slurm_utils.get_job_status(ji) \
-                    for ri, ji in zip(jobs, jobids)}
+                    for ri, ji in zip(rowids, jobids)}
         print('fetched status in {0}'.format(time.time() - start))
 
         query = '''UPDATE daligner_job
