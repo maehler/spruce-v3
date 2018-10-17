@@ -50,3 +50,8 @@ def get_job_status(jobid):
                 return job_status.strip().split()[0]
 
     raise ValueError('invalid job id specified')
+
+def cancel_jobs(jobids):
+    args = ['scancel', *map(str, jobids)]
+    p = Popen(args, shell=False, encoding='utf8')
+    p.wait()

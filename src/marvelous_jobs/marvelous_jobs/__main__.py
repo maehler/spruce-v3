@@ -133,7 +133,7 @@ def start_daligner(force=False, no_masking=False):
         db.remove_daligner_jobs()
         os.remove(os.path.join(config.get('general',
                                           'script_directory'),
-                               daligner_job.filename))
+                               daligner_job_array.filename))
 
     print('Adding daligner jobs to database: ', end='')
 
@@ -174,6 +174,35 @@ def start_daligner(force=False, no_masking=False):
 
     update_daligner_queue()
 
+def get_daligner_array(rowids, config, masking_jobid=None):
+    job_array = daligner_job_array(rowids,
+                                   config.get('general', 'database'),
+                                   script_directory=config.get('general',
+                                                               'script_directory'),
+                                   log_directory=config.get('general',
+                                                            'log_directory'),
+                                   masking_jobid=masking_jobid,
+                                   masking_port=config.getint('DMserver',
+                                                              'port'),
+                                   account=config.get('general', 'account'),
+                                   timelimit=config.get('daligner',
+                                                        'timelimit'),
+                                   verbose=config.getboolean('daligner',
+                                                             'verbose'),
+                                   identity=config.getboolean('daligner',
+                                                              'identity'),
+                                   tuple_suppression_frequency=config.getint('daligner',
+                                                                             'tuple_suppression_frequency'),
+                                   correlation_rate=config.getfloat('daligner',
+                                                                    'correlation_rate'),
+                                   threads=config.getint('daligner', 'threads'))
+
+    return job_array
+
+def submit_daligner_jobs(rowids, config, masking_jobid=None):
+    job_array = get_daligner_array(rowids, config, masking_jobid)
+    return job_array.start()
+
 def update_daligner_queue():
     config = mc()
     db = get_database()
@@ -188,24 +217,11 @@ def update_daligner_queue():
     if db.any_using_masking():
         queued_jobs += 1
 
-    print('Queuing jobs: {0}/{1}'.format(queued_jobs, max_jobs), end='')
-
     jobs_to_queue = db.get_daligner_jobs(max_jobs - queued_jobs,
                                          slurm_utils.status.notstarted)
 
-    try:
-        for i, dj in enumerate(jobs_to_queue, start=1):
-            jobid = dj.start()
-            print('\rQueuing jobs: {0}/{1}'.format(i, len(jobs_to_queue)), end='')
-    except (RuntimeError, KeyboardInterrupt) as e:
-        print(e, file=sys.stderr)
-        print('Cleaning up...', file=sys.stderr)
-        db.update_daligner_job(jobs_to_queue)
-        sys.exit(1)
-
-    db.update_daligner_job(jobs_to_queue)
-
-    print()
+    jobid = submit_daligner_array(jobs_to_queue, config, db.get_masking_jobid)
+    db.update_daligner_jobs(jobs_to_queue, jobid=jobid)
 
 def stop_daligner(status=(slurm_utils.status.running,
                           slurm_utils.status.pending)):
@@ -213,8 +229,18 @@ def stop_daligner(status=(slurm_utils.status.running,
     update_statuses()
 
     jobs = db.get_daligner_jobs(status=tuple(status))
+    jobids = db.get_daligner_jobids(jobs)
 
-    print('Stopping daligner jobs: 0/{0}'.format(len(jobs)), end='')
+    # For now stop whole arrays, so if only running jobs
+    # are supposed to be stopped, also pending jobs in the
+    # that are in the same array as the running jobs will
+    # be stopped.
+    array_ids = set()
+    for ji in jobids.values():
+        array_id = ji.split('_')[0]
+        array_ids.add(array_id)
+
+    print('Stopping daligner jobs')
 
     for i, dj in enumerate(jobs, start=1):
         dj.cancel()
@@ -348,24 +374,16 @@ def update_and_restart():
                                                slurm_utils.status.timeout))
 
     if len(failed_jobs) > 0:
-        for dj in failed_jobs:
-            dj.start()
-
-        db.update_daligner_job(failed_jobs)
+        jobid = submit_daligner_jobs(failed_jobs, config, db.get_masking_jobid)
+        db.update_daligner_jobs(failed_jobs, jobid)
 
     if masking_ip_changed:
         pending_jobs = db.get_daligner_jobs(status=(slurm_utils.status.pending))
         if len(pending_jobs) > 0:
-            try:
-                for dj in pending_jobs:
-                    dj.cancel()
-                    dj.start()
-            except (RuntimeError, KeyboardInterrupt) as e:
-                print(e, file=sys.stderr)
-                print('Cleaning up...', file=sys.stderr)
-                db.update_daligner_job(jobs_to_queue)
-                sys.exit(1)
-            db.update_daligner_job(pending_jobs)
+            slurm_utils.cancel_jobs(pending_jobs)
+            jobid = submit_daligner_jobs(pending_jobs, config,
+                                         db.get_masking_jobid)
+            db.update_daligner_jobs(pending_jobs, jobid)
 
     update_statuses()
 
@@ -393,7 +411,7 @@ def update_statuses():
                                        slurm_utils.status.running,
                                        slurm_utils.status.completing))
     print('fetched jobs in {0}'.format(time.time() - start))
-    db.update_daligner_job(djs)
+    db.update_daligner_jobs(djs)
 
 # Helper functions for the argument parsing
 def directory_exists(s):
