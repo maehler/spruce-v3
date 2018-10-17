@@ -486,17 +486,23 @@ def parse_args():
 
     # daligner
     dalign_parser = subparsers.add_parser('daligner', help='Run daligner')
-    dalign_parser.add_argument('-u', '--update', help='update the job queue '
-                               'and start jobs that have not yet been started '
-                               'if there is room for them',
-                               action='store_true')
-    dalign_parser.add_argument('--stop', help='cancel all pending and running '
-                               'daligner jobs', action='store_true')
-    dalign_parser.add_argument('-f', '--force', help='forcefully add daligner '
-                               'jobs, removing any existing jobs',
-                               action='store_true')
-    dalign_parser.add_argument('--no-masking', help='do not use the masking '
-                               'server', action='store_true')
+    dalign_subparsers = dalign_parser.add_subparsers(title='daligner command',
+                                                     dest='subsubcommand')
+
+    # daligner start
+    dalign_start = dalign_subparsers.add_parser('start', help='initialise '
+                                                'daligner jobs')
+    dalign_start.add_argument('-f', '--force', help='forcefully add daligner '
+                              'jobs, removing any existing jobs')
+    dalign_start.add_argument('--no-masking', help='do not use the masking '
+                              'server', action='store_true')
+
+    # daligner update
+    dalign_update = dalign_subparsers.add_parser('update', help='submit '
+                                                 'daligner jobs')
+
+    # daligner stop
+    dalign_stop = dalign_subparsers.add_parser('stop', help='stop daligner jobs')
 
     # Update status and restart jobs if necessary
     fix_parser = subparsers.add_parser('fix', help='Update and restart jobs')
@@ -537,6 +543,9 @@ def main():
              account=args.account,
              coverage=args.coverage, force=args.force,
              n_jobs=args.max_jobs)
+    elif not is_project():
+        print('error: no project found, have you run init?', file=sys.stderr)
+        sys.exit(1)
     if args.subcommand == 'prepare':
         prepare(fasta=args.fasta,
                 blocksize=args.blocksize,
@@ -549,13 +558,12 @@ def main():
         mask_status()
     if args.subcommand == 'mask' and args.subsubcommand == 'stop':
         stop_mask()
-    if args.subcommand == 'daligner':
-        if args.update:
-            update_daligner_queue()
-        elif args.stop:
-            stop_daligner()
-        else:
-            start_daligner(args.force, args.no_masking)
+    if args.subcommand == 'daligner' and args.subsubcommand == 'start':
+        start_daligner(args.force, args.no_masking)
+    if args.subcommand == 'daligner' and args.subsubcommand == 'update':
+        update_daligner_queue()
+    if args.subcommand == 'daligner' and args.subsubcommand == 'stop':
+        stop_daligner()
     if args.subcommand == 'fix':
         update_and_restart()
     if args.subcommand == 'info':
