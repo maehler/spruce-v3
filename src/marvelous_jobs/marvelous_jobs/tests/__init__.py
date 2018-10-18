@@ -46,6 +46,7 @@ config = mj.marvelous_config(
         'threads': 4,
         'port': 12345,
         'cluster': 'snowy',
+        'checkpoint_file': os.path.join(testdir, 'masking_checkpoint'),
         'timelimit': '10-00:00:00'
     }
 })

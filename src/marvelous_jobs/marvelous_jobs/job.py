@@ -11,7 +11,6 @@ class marvel_job:
     def __init__(self, args, jobname, filename,
                  log_filename=None, account=None,
                  jobid=None, **kwargs):
-        config = mj.marvelous_config()
         self.sbatch_args = kwargs
         self.args = args
         self.jobname = jobname
@@ -42,8 +41,8 @@ class marvel_job:
             with open(self.filename, 'w') as f:
                 f.write(str_script)
 
-    def start(self, dryrun=False, *args):
-        if not os.path.isfile(self.filename):
+    def start(self, dryrun=False, force_write=False, *args):
+        if not os.path.isfile(self.filename) or force_write:
             self.save_script()
         run_args = ['sbatch',
                     '--array' if 'array' in self.sbatch_args else '',
@@ -253,19 +252,27 @@ class masking_server_job(marvel_job):
 
     filename = 'marvel_masking.sh'
 
-    def __init__(self, name, coverage, jobid=None):
-        config = mj.marvelous_config()
+    def __init__(self, name, coverage, checkpoint_file,
+                 script_directory=None, log_directory=None,
+                 jobid=None, port=12345, threads=4, constraint=None,
+                 cluster=None, account=None, timelimit='10-00:00:00'):
         jobname = 'marvel_masking'
-        self.port = config.getint('DMserver', 'port')
-        self.threads = config.getint('DMserver', 'threads')
+        self.port = port
+        self.threads = threads
+        if script_directory is not None:
+            self.filename = os.path.join(script_directory,
+                                         masking_server_job.filename)
+        else:
+            self.filename = masking_server_job.filename
         args = [
             os.path.join(marvel.config.PATH_BIN, 'DMserver'),
-            '-t', config.get('DMserver', 'threads'),
-            '-p', config.get('DMserver', 'port'),
+            '-t', str(self.threads),
+            '-p', str(self.port),
             name, str(coverage),
-            config.get('DMserver', 'checkpoint_file')
+            checkpoint_file
         ]
-        self.constraint = config.get('DMserver', 'constraint')
+        self.constraint = constraint
+        self.cluster = cluster
         self.ip = None
         if jobid is not None:
             node = mj.slurm_utils.get_job_node(jobid)
@@ -273,12 +280,17 @@ class masking_server_job(marvel_job):
                 self.ip = mj.slurm_utils.get_node_ip(node)
         super().__init__(args,
                          jobname,
-                         masking_server_job.filename,
+                         self.filename,
                          jobid=jobid,
-                         timelimit=config.get('DMserver', 'timelimit'),
+                         account=account,
+                         timelimit=timelimit,
                          partition='node',
                          cores=1,
-                         constraint=self.constraint)
+                         constraint=self.constraint,
+                         cluster=self.cluster)
+
+    def start(self, dryrun=False, *args):
+        return super().start(dryrun=dryrun, force_write=True, *args)
 
     def stop(self):
         dmctl = os.path.join(marvel.config.PATH_BIN, 'DMctl')
