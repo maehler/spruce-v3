@@ -248,7 +248,7 @@ def stop_daligner(status=(slurm_utils.status.running,
 
     print('')
 
-def start_mask(threads=4, port=12345, constraint=None):
+def start_mask(threads=4, port=12345, constraint=None, cluster=None):
     config = mc()
     db = get_database()
 
@@ -258,6 +258,7 @@ def start_mask(threads=4, port=12345, constraint=None):
     config.set('DMserver', 'threads', threads)
     config.set('DMserver', 'port', port)
     config.set('DMserver', 'constraint', constraint)
+    config.set('DMserver', 'cluster', cluster)
     config.set('DMserver', 'checkpoint_file',
                os.path.join(config.get('general', 'directory'),
                             'masking_checkpoint'))
@@ -480,6 +481,7 @@ def parse_args():
                             type=int, default=4)
     mask_start.add_argument('-p', '--port', help='port to listen to (default: '
                             '12345)', type=int, default=12345)
+    mask_start.add_argument('-M', '--cluster', help='cluster to run on')
 
     # Stop masking server
     mask_stop = mask_subparsers.add_parser('stop', help='stop masking server')
@@ -553,7 +555,7 @@ def main():
                 log_directory=args.log_directory,
                 force=args.force)
     if args.subcommand == 'mask' and args.subsubcommand == 'start':
-        start_mask(args.threads, args.port, args.constraint)
+        start_mask(args.threads, args.port, args.constraint, args.cluster)
     if args.subcommand == 'mask' and args.subsubcommand == 'status':
         mask_status()
     if args.subcommand == 'mask' and args.subsubcommand == 'stop':

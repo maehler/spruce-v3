@@ -26,7 +26,7 @@ class marvel_job:
     def commandline(self):
         lines = []
         for args in self.args:
-            lines.append(' '.join(x for x in args if len(x) > 0))
+            lines.append(' '.join(x for x in args if x is not None and len(x) > 0))
         return '\n'.join(lines)
 
     def save_script(self):
@@ -49,13 +49,18 @@ class marvel_job:
                     '--array' if 'array' in self.sbatch_args else '',
                     self.sbatch_args.get('array') \
                         if 'array' in self.sbatch_args else '',
+                    '-M' if self.sbatch_args.get('cluster') is not None \
+                        else '',
+                    self.sbatch_args.get('cluster') \
+                        if self.sbatch_args.get('cluster') is not None \
+                            else '',
                     '-o' if self.logfile is not None else '',
                     self.logfile if self.logfile is not None else '',
                     '-J', self.jobname,
                     self.filename,
                     *args]
         if dryrun:
-            return ' '.join(run_args)
+            return ' '.join(x for x in run_args if x is not None)
         p = Popen(run_args, shell=False, stdout=PIPE, stderr=PIPE)
         output = p.communicate()
         if len(output[1].strip()) > 0:

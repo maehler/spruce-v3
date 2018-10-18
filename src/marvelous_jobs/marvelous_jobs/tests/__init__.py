@@ -45,6 +45,7 @@ config = mj.marvelous_config(
     'DMserver': {
         'threads': 4,
         'port': 12345,
+        'cluster': 'snowy',
         'timelimit': '10-00:00:00'
     }
 })
