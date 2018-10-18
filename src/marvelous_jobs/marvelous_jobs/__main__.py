@@ -9,7 +9,7 @@ import time
 
 import marvelous_jobs as mj
 from marvelous_jobs import marvelous_config as mc
-from marvelous_jobs import daligner_job, masking_server_job, prepare_job
+from marvelous_jobs import daligner_job_array, masking_server_job, prepare_job
 from marvelous_jobs import slurm_utils
 
 import marvel
@@ -89,8 +89,11 @@ def prepare(fasta, blocksize, script_directory, log_directory, force=False):
     config.set('general', 'fasta', os.path.abspath(fasta))
 
     db.add_prepare_job()
-    job = prepare_job(projname, fasta)
-    job.save_script()
+    job = prepare_job(projname, fasta, blocksize,
+                      script_directory=config.get('general',
+                                                  'script_directory'),
+                      log_directory=config.get('general', 'log_directory'),
+                      account=config.get('general', 'account'))
     jobid = job.start()
     db.update_prepare_job_id(jobid)
 
@@ -133,7 +136,7 @@ def start_daligner(force=False, no_masking=False):
         db.remove_daligner_jobs()
         os.remove(os.path.join(config.get('general',
                                           'script_directory'),
-                               daligner_job.filename))
+                               daligner_job_array.filename))
 
     print('Adding daligner jobs to database: ', end='')
 
@@ -174,6 +177,35 @@ def start_daligner(force=False, no_masking=False):
 
     update_daligner_queue()
 
+def get_daligner_array(rowids, config, masking_jobid=None):
+    job_array = daligner_job_array(rowids,
+                                   config.get('general', 'database'),
+                                   script_directory=config.get('general',
+                                                               'script_directory'),
+                                   log_directory=config.get('general',
+                                                            'log_directory'),
+                                   masking_jobid=masking_jobid,
+                                   masking_port=config.getint('DMserver',
+                                                              'port'),
+                                   account=config.get('general', 'account'),
+                                   timelimit=config.get('daligner',
+                                                        'timelimit'),
+                                   verbose=config.getboolean('daligner',
+                                                             'verbose'),
+                                   identity=config.getboolean('daligner',
+                                                              'identity'),
+                                   tuple_suppression_frequency=config.getint('daligner',
+                                                                             'tuple_suppression_frequency'),
+                                   correlation_rate=config.getfloat('daligner',
+                                                                    'correlation_rate'),
+                                   threads=config.getint('daligner', 'threads'))
+
+    return job_array
+
+def submit_daligner_jobs(rowids, config, masking_jobid=None):
+    job_array = get_daligner_array(rowids, config, masking_jobid)
+    return job_array.start()
+
 def update_daligner_queue():
     config = mc()
     db = get_database()
@@ -188,24 +220,11 @@ def update_daligner_queue():
     if db.any_using_masking():
         queued_jobs += 1
 
-    print('Queuing jobs: {0}/{1}'.format(queued_jobs, max_jobs), end='')
-
     jobs_to_queue = db.get_daligner_jobs(max_jobs - queued_jobs,
                                          slurm_utils.status.notstarted)
 
-    try:
-        for i, dj in enumerate(jobs_to_queue, start=1):
-            jobid = dj.start()
-            print('\rQueuing jobs: {0}/{1}'.format(i, len(jobs_to_queue)), end='')
-    except (RuntimeError, KeyboardInterrupt) as e:
-        print(e, file=sys.stderr)
-        print('Cleaning up...', file=sys.stderr)
-        db.update_daligner_job(jobs_to_queue)
-        sys.exit(1)
-
-    db.update_daligner_job(jobs_to_queue)
-
-    print()
+    jobid = submit_daligner_array(jobs_to_queue, config, db.get_masking_jobid)
+    db.update_daligner_jobs(jobs_to_queue, jobid=jobid)
 
 def stop_daligner(status=(slurm_utils.status.running,
                           slurm_utils.status.pending)):
@@ -213,8 +232,18 @@ def stop_daligner(status=(slurm_utils.status.running,
     update_statuses()
 
     jobs = db.get_daligner_jobs(status=tuple(status))
+    jobids = db.get_daligner_jobids(jobs)
 
-    print('Stopping daligner jobs: 0/{0}'.format(len(jobs)), end='')
+    # For now stop whole arrays, so if only running jobs
+    # are supposed to be stopped, also pending jobs in the
+    # that are in the same array as the running jobs will
+    # be stopped.
+    array_ids = set()
+    for ji in jobids.values():
+        array_id = ji.split('_')[0]
+        array_ids.add(array_id)
+
+    print('Stopping daligner jobs')
 
     for i, dj in enumerate(jobs, start=1):
         dj.cancel()
@@ -222,7 +251,7 @@ def stop_daligner(status=(slurm_utils.status.running,
 
     print('')
 
-def start_mask(threads=4, port=12345, constraint=None):
+def start_mask(threads=4, port=12345, constraint=None, cluster=None):
     config = mc()
     db = get_database()
 
@@ -232,6 +261,7 @@ def start_mask(threads=4, port=12345, constraint=None):
     config.set('DMserver', 'threads', threads)
     config.set('DMserver', 'port', port)
     config.set('DMserver', 'constraint', constraint)
+    config.set('DMserver', 'cluster', cluster)
     config.set('DMserver', 'checkpoint_file',
                os.path.join(config.get('general', 'directory'),
                             'masking_checkpoint'))
@@ -244,7 +274,18 @@ def start_mask(threads=4, port=12345, constraint=None):
         sys.exit(1)
 
     job = masking_server_job(db.get_project_name(),
-                             db.get_coverage())
+                             db.get_coverage(),
+                             config.get('DMserver', 'checkpoint_file'),
+                             script_directory=config.get('general',
+                                                         'script_directory'),
+                             log_directory=config.get('general',
+                                                      'log_directory'),
+                             port=port,
+                             threads=threads,
+                             constraint=constraint,
+                             cluster=cluster,
+                             account=config.get('general', 'account'),
+                             timelimit=config.get('DMserver', 'timelimit'))
     db.add_masking_job(job)
     job.save_script()
 
@@ -276,7 +317,17 @@ def stop_mask():
 
     job = masking_server_job(db.get_project_name(),
                              db.get_coverage(),
-                             jobid=masking_status[0])
+                             jobid=masking_status[0],
+                             script_directory=config.get('general',
+                                                         'script_directory'),
+                             log_directory=config.get('general',
+                                                      'log_directory'),
+                             port=config.getint('DMserver', 'port'),
+                             threads=config.getint('DMserver', 'threads'),
+                             constraint=config.get('DMserver', 'constraint'),
+                             cluster=config.get('DMserver', 'cluster'),
+                             account=config.get('general', 'account'),
+                             timelimit=config.get('DMserver', 'timelimit'))
 
     print('Stopping masking server...')
 
@@ -348,30 +399,16 @@ def update_and_restart():
                                                slurm_utils.status.timeout))
 
     if len(failed_jobs) > 0:
-        try:
-            for dj in failed_jobs:
-                dj.start()
-        except (RuntimeError, KeyboardInterrupt) as e:
-            print(e, file=sys.stderr)
-            print('Cleaning up...', file=sys.stderr)
-            db.update_daligner_job(failed_jobs)
-            sys.exit(1)
-
-        db.update_daligner_job(failed_jobs)
+        jobid = submit_daligner_jobs(failed_jobs, config, db.get_masking_jobid)
+        db.update_daligner_jobs(failed_jobs, jobid)
 
     if masking_ip_changed:
         pending_jobs = db.get_daligner_jobs(status=(slurm_utils.status.pending))
         if len(pending_jobs) > 0:
-            try:
-                for dj in pending_jobs:
-                    dj.cancel()
-                    dj.start()
-            except (RuntimeError, KeyboardInterrupt) as e:
-                print(e, file=sys.stderr)
-                print('Cleaning up...', file=sys.stderr)
-                db.update_daligner_job(pending_jobs)
-                sys.exit(1)
-            db.update_daligner_job(pending_jobs)
+            slurm_utils.cancel_jobs(pending_jobs)
+            jobid = submit_daligner_jobs(pending_jobs, config,
+                                         db.get_masking_jobid)
+            db.update_daligner_jobs(pending_jobs, jobid)
 
     update_statuses()
 
@@ -399,7 +436,7 @@ def update_statuses():
                                        slurm_utils.status.running,
                                        slurm_utils.status.completing))
     print('fetched jobs in {0}'.format(time.time() - start))
-    db.update_daligner_job(djs)
+    db.update_daligner_jobs(djs)
 
 # Helper functions for the argument parsing
 def directory_exists(s):
@@ -468,23 +505,30 @@ def parse_args():
                             type=int, default=4)
     mask_start.add_argument('-p', '--port', help='port to listen to (default: '
                             '12345)', type=int, default=12345)
+    mask_start.add_argument('-M', '--cluster', help='cluster to run on')
 
     # Stop masking server
     mask_stop = mask_subparsers.add_parser('stop', help='stop masking server')
 
     # daligner
     dalign_parser = subparsers.add_parser('daligner', help='Run daligner')
-    dalign_parser.add_argument('-u', '--update', help='update the job queue '
-                               'and start jobs that have not yet been started '
-                               'if there is room for them',
-                               action='store_true')
-    dalign_parser.add_argument('--stop', help='cancel all pending and running '
-                               'daligner jobs', action='store_true')
-    dalign_parser.add_argument('-f', '--force', help='forcefully add daligner '
-                               'jobs, removing any existing jobs',
-                               action='store_true')
-    dalign_parser.add_argument('--no-masking', help='do not use the masking '
-                               'server', action='store_true')
+    dalign_subparsers = dalign_parser.add_subparsers(title='daligner command',
+                                                     dest='subsubcommand')
+
+    # daligner start
+    dalign_start = dalign_subparsers.add_parser('start', help='initialise '
+                                                'daligner jobs')
+    dalign_start.add_argument('-f', '--force', help='forcefully add daligner '
+                              'jobs, removing any existing jobs')
+    dalign_start.add_argument('--no-masking', help='do not use the masking '
+                              'server', action='store_true')
+
+    # daligner update
+    dalign_update = dalign_subparsers.add_parser('update', help='submit '
+                                                 'daligner jobs')
+
+    # daligner stop
+    dalign_stop = dalign_subparsers.add_parser('stop', help='stop daligner jobs')
 
     # Update status and restart jobs if necessary
     fix_parser = subparsers.add_parser('fix', help='Update and restart jobs')
@@ -525,6 +569,9 @@ def main():
              account=args.account,
              coverage=args.coverage, force=args.force,
              n_jobs=args.max_jobs)
+    elif not is_project():
+        print('error: no project found, have you run init?', file=sys.stderr)
+        sys.exit(1)
     if args.subcommand == 'prepare':
         prepare(fasta=args.fasta,
                 blocksize=args.blocksize,
@@ -532,18 +579,17 @@ def main():
                 log_directory=args.log_directory,
                 force=args.force)
     if args.subcommand == 'mask' and args.subsubcommand == 'start':
-        start_mask(args.threads, args.port, args.constraint)
+        start_mask(args.threads, args.port, args.constraint, args.cluster)
     if args.subcommand == 'mask' and args.subsubcommand == 'status':
         mask_status()
     if args.subcommand == 'mask' and args.subsubcommand == 'stop':
         stop_mask()
-    if args.subcommand == 'daligner':
-        if args.update:
-            update_daligner_queue()
-        elif args.stop:
-            stop_daligner()
-        else:
-            start_daligner(args.force, args.no_masking)
+    if args.subcommand == 'daligner' and args.subsubcommand == 'start':
+        start_daligner(args.force, args.no_masking)
+    if args.subcommand == 'daligner' and args.subsubcommand == 'update':
+        update_daligner_queue()
+    if args.subcommand == 'daligner' and args.subsubcommand == 'stop':
+        stop_daligner()
     if args.subcommand == 'fix':
         update_and_restart()
     if args.subcommand == 'info':
