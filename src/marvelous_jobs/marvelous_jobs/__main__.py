@@ -8,6 +8,7 @@ import sys
 import time
 
 import marvelous_jobs as mj
+from marvelous_jobs import __version__
 from marvelous_jobs import marvelous_config as mc
 from marvelous_jobs import daligner_job_array, masking_server_job, prepare_job
 from marvelous_jobs import slurm_utils
@@ -447,6 +448,9 @@ def positive_integer(i):
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Job manager for MARVEL')
+
+    parser.add_argument('--version', action='version',
+                        version='%(prog)s v{0}'.format(__version__))
 
     subparsers = parser.add_subparsers(title='subcommands',
                                        dest='subcommand')
