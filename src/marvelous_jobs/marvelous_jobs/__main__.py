@@ -9,7 +9,7 @@ import time
 
 import marvelous_jobs as mj
 from marvelous_jobs import marvelous_config as mc
-from marvelous_jobs import daligner_job, masking_server_job, prepare_job
+from marvelous_jobs import daligner_job_array, masking_server_job, prepare_job
 from marvelous_jobs import slurm_utils
 
 import marvel
@@ -89,8 +89,11 @@ def prepare(fasta, blocksize, script_directory, log_directory, force=False):
     config.set('general', 'fasta', os.path.abspath(fasta))
 
     db.add_prepare_job()
-    job = prepare_job(projname, fasta)
-    job.save_script()
+    job = prepare_job(projname, fasta, blocksize,
+                      script_directory=config.get('general',
+                                                  'script_directory'),
+                      log_directory=config.get('general', 'log_directory'),
+                      account=config.get('general', 'account'))
     jobid = job.start()
     db.update_prepare_job_id(jobid)
 
@@ -271,7 +274,18 @@ def start_mask(threads=4, port=12345, constraint=None, cluster=None):
         sys.exit(1)
 
     job = masking_server_job(db.get_project_name(),
-                             db.get_coverage())
+                             db.get_coverage(),
+                             config.get('DMserver', 'checkpoint_file'),
+                             script_directory=config.get('general',
+                                                         'script_directory'),
+                             log_directory=config.get('general',
+                                                      'log_directory'),
+                             port=port,
+                             threads=threads,
+                             constraint=constraint,
+                             cluster=cluster,
+                             account=config.get('general', 'account'),
+                             timelimit=config.get('DMserver', 'timelimit'))
     db.add_masking_job(job)
     job.save_script()
 
@@ -303,7 +317,17 @@ def stop_mask():
 
     job = masking_server_job(db.get_project_name(),
                              db.get_coverage(),
-                             jobid=masking_status[0])
+                             jobid=masking_status[0],
+                             script_directory=config.get('general',
+                                                         'script_directory'),
+                             log_directory=config.get('general',
+                                                      'log_directory'),
+                             port=config.getint('DMserver', 'port'),
+                             threads=config.getint('DMserver', 'threads'),
+                             constraint=config.get('DMserver', 'constraint'),
+                             cluster=config.get('DMserver', 'cluster'),
+                             account=config.get('general', 'account'),
+                             timelimit=config.get('DMserver', 'timelimit'))
 
     print('Stopping masking server...')
 
