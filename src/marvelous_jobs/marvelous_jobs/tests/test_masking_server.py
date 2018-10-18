@@ -1,4 +1,3 @@
-
 from nose.tools import assert_equals
 from nose.tools import assert_true
 from nose.tools import assert_false
@@ -36,6 +35,9 @@ def test_masking_server_sbatch_args():
         str_script = f.read()
     assert_true('-M snowy' in cmd)
     assert_false('#SBATCH -C' in str_script)
+    assert_true('-o {0}/marvel_masking.log' \
+                    .format(config.get('general', 'log_directory')) \
+                in cmd)
 
     job = mj.masking_server_job('test', 20,
                                 config.get('DMserver', 'checkpoint_file'),
@@ -53,3 +55,6 @@ def test_masking_server_sbatch_args():
     assert_false('-M snowy' in cmd)
     assert_true('-M rackham' in cmd)
     assert_true('#SBATCH -C mem256GB' in str_script)
+    assert_true('-o {0}/marvel_masking.log' \
+                    .format(config.get('general', 'log_directory')) \
+                in cmd)

@@ -32,7 +32,9 @@ config = mj.marvelous_config(
         'directory': testdir,
         'script_directory': script_dir,
         'log_directory': log_dir,
-        'max_number_of_jobs': 10
+        'blocksize': 20,
+        'max_number_of_jobs': 10,
+        'fasta': os.path.join(testdir, 'dummy_fasta.fa')
     },
     'daligner': {
         'verbose': True,

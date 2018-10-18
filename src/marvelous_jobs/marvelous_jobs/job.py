@@ -25,7 +25,8 @@ class marvel_job:
     def commandline(self):
         lines = []
         for args in self.args:
-            lines.append(' '.join(x for x in args if x is not None and len(x) > 0))
+            lines.append(' '.join(str(x) for x in args if x is not None \
+                                  and len(str(x)) > 0))
         return '\n'.join(lines)
 
     def save_script(self):
@@ -98,15 +99,28 @@ class prepare_job(marvel_job):
 
     filename = 'marvel_prepare.sh'
 
-    def __init__(self, name, fasta):
-        config = mj.marvelous_config()
+    def __init__(self, name, fasta, blocksize,
+                 script_directory=None, log_directory=None,
+                 account=None):
         args = [os.path.join(marvel.config.PATH_SCRIPTS, 'DBprepare.py'),
-                '--blocksize', config.get('general', 'blocksize'),
+                '--blocksize', blocksize,
                 name, fasta]
+        jobname = 'marvel_prepare'
+        if script_directory is not None:
+            self.filename = os.path.join(script_directory, prepare_job.filename)
+        else:
+            self.filename = prepare_job.filename
+        if log_directory is not None:
+            self.logfile = os.path.join(log_directory, '{0}.log'.format(jobname))
         super().__init__(args,
-                         'marvel_prepare',
-                         prepare_job.filename,
+                         jobname,
+                         self.filename,
+                         log_filename=self.logfile,
+                         account=account,
                          timelimit='1-00:00:00')
+
+    def start(self, dryrun=False, *args):
+        return super().start(dryrun=dryrun, force_write=True, *args)
 
 class daligner_job_array(marvel_job):
 
@@ -154,12 +168,12 @@ class daligner_job_array(marvel_job):
             [os.path.join(marvel.config.PATH_BIN, 'daligner'),
              '-v' if verbose else '',
              '-I' if identity else '',
-             '-t', str(tuple_suppression_frequency),
-             '-e', str(correlation_rate),
+             '-t', tuple_suppression_frequency,
+             '-e', correlation_rate,
              '-D' if self.use_masking_server else '',
              '${{maskip}}:{0}'.format(masking_port) \
                 if self.use_masking_server else '',
-             '-j', str(threads),
+             '-j', threads,
              '"${project}.${block1}"', '"${project}.${block2}"']
         ]
 
@@ -228,12 +242,12 @@ class daligner_job(marvel_job):
             [os.path.join(marvel.config.PATH_BIN, 'daligner'),
              '-v' if verbose else '',
              '-I' if identity else '',
-             '-t', str(tuple_suppression_frequency),
-             '-e', str(correlation_rate),
+             '-t', tuple_suppression_frequency,
+             '-e', correlation_rate,
              '-D' if self.use_masking_server else '',
              '${{maskip}}:{0}'.format(masking_port) \
                 if self.use_masking_server else '',
-             '-j', str(threads),
+             '-j', threads,
              '"${project}.${block1}"', '"${project}.${block2}"']
         ]
 
@@ -245,8 +259,8 @@ class daligner_job(marvel_job):
                          after=masking_jobid,
                          account=account)
 
-    def start(self):
-        return super().start(str(self.rowid))
+    def start(self, dryrun=False):
+        return super().start(dryrun=dryrun, force_write=False, *[self.rowid])
 
 class masking_server_job(marvel_job):
 
@@ -264,11 +278,16 @@ class masking_server_job(marvel_job):
                                          masking_server_job.filename)
         else:
             self.filename = masking_server_job.filename
+        if log_directory is not None:
+            self.logfile = os.path.join(log_directory,
+                                        '{0}.log'.format(jobname))
+        else:
+            self.logfile = '{0}.log'.format(jobname)
         args = [
             os.path.join(marvel.config.PATH_BIN, 'DMserver'),
-            '-t', str(self.threads),
-            '-p', str(self.port),
-            name, str(coverage),
+            '-t', self.threads,
+            '-p', self.port,
+            name, coverage,
             checkpoint_file
         ]
         self.constraint = constraint
@@ -281,6 +300,7 @@ class masking_server_job(marvel_job):
         super().__init__(args,
                          jobname,
                          self.filename,
+                         log_filename=self.logfile,
                          jobid=jobid,
                          account=account,
                          timelimit=timelimit,
