@@ -380,6 +380,7 @@ def info():
         print('{0:>{widest}}: {1}'.format(k, v, widest=widest))
 
 def update_and_restart():
+    config = mc()
     db = get_database()
     update_statuses()
 
@@ -394,7 +395,10 @@ def update_and_restart():
             and db.any_using_masking():
         print('Masking server is down, restarting...')
         stop_daligner(status=(slurm_utils.status.running,))
-        start_mask()
+        start_mask(threads=config.get('DMserver', 'threads'),
+                   port=config.get('DMserver', 'port'),
+                   constraint=config.get('DMserver', 'constraint'),
+                   cluster=config.get('DMserver', 'cluster'))
 
     update_statuses()
 
