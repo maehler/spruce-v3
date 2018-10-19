@@ -33,6 +33,9 @@ class marvelous_config:
     def getint(self, section, key, default=None):
         return self.config.getint(section, key, fallback=default)
 
+    def getfloat(self, section, key, default=None):
+        return self.config.getfloat(section, key, fallback=default)
+
     def set_dict(self, cdict):
         for section, c in cdict.items():
             if section not in self.config.sections():

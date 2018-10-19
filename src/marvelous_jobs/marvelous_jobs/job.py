@@ -59,9 +59,10 @@ class marvel_job:
                     '-J', self.jobname,
                     self.filename,
                     *args]
+        clean_args = [str(x) for x in run_args if len(str(x)) > 0]
         if dryrun:
-            return ' '.join(x for x in run_args if x is not None)
-        p = Popen(run_args, shell=False, stdout=PIPE, stderr=PIPE)
+            return ' '.join(clean_args)
+        p = Popen(clean_args, shell=False, stdout=PIPE, stderr=PIPE)
         output = p.communicate()
         if len(output[1].strip()) > 0:
             raise RuntimeError(output[1].decode('utf-8'))
@@ -139,10 +140,10 @@ class daligner_job_array(marvel_job):
             self.filename = os.path.join(script_directory,
                                          daligner_job_array.filename)
         if log_directory is None:
-            self.logfile = '{0}_%J.log' \
+            self.logfile = '{0}_%A_%a.log' \
                     .format(os.path.splitext(daligner_job_array.filename)[0])
         else:
-            self.logfile = os.path.join(log_directory, '{0}_%J.log' \
+            self.logfile = os.path.join(log_directory, '{0}_%A_%a.log' \
                                         .format(os.path.splitext(daligner_job_array.filename)[0]))
 
         args = [

@@ -64,6 +64,7 @@ def prepare(fasta, blocksize, script_directory, log_directory, force=False):
         sys.exit(1)
 
     db = get_database()
+    update_statuses()
 
     if db.is_prepared() and not force:
         print('error: database is already prepared', file=sys.stderr)
@@ -135,9 +136,10 @@ def start_daligner(force=False, no_masking=False):
         db.remove_blocks()
         stop_daligner()
         db.remove_daligner_jobs()
-        os.remove(os.path.join(config.get('general',
-                                          'script_directory'),
-                               daligner_job_array.filename))
+        daligner_script = os.path.join(config.get('general', 'script_directory'),
+                                       daligner_job_array.filename)
+        if os.path.exists(daligner_script):
+            os.remove(daligner_script)
 
     print('Adding daligner jobs to database: ', end='')
 
@@ -204,6 +206,8 @@ def get_daligner_array(rowids, config, masking_jobid=None):
     return job_array
 
 def submit_daligner_jobs(rowids, config, masking_jobid=None):
+    if len(rowids) == 0:
+        return
     job_array = get_daligner_array(rowids, config, masking_jobid)
     return job_array.start()
 
@@ -224,7 +228,12 @@ def update_daligner_queue():
     jobs_to_queue = db.get_daligner_jobs(max_jobs - queued_jobs,
                                          slurm_utils.status.notstarted)
 
-    jobid = submit_daligner_array(jobs_to_queue, config, db.get_masking_jobid)
+    print('Queuing {0} jobs...'.format(len(jobs_to_queue)))
+
+    if len(jobs_to_queue) == 0:
+        return
+
+    jobid = submit_daligner_jobs(jobs_to_queue, config, db.get_masking_jobid())
     db.update_daligner_jobs(jobs_to_queue, jobid=jobid)
 
 def stop_daligner(status=(slurm_utils.status.running,
@@ -523,7 +532,8 @@ def parse_args():
     dalign_start = dalign_subparsers.add_parser('start', help='initialise '
                                                 'daligner jobs')
     dalign_start.add_argument('-f', '--force', help='forcefully add daligner '
-                              'jobs, removing any existing jobs')
+                              'jobs, removing any existing jobs',
+                              action='store_true')
     dalign_start.add_argument('--no-masking', help='do not use the masking '
                               'server', action='store_true')
 

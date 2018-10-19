@@ -45,14 +45,14 @@ def test_array_submit():
     assert_true('-o {0}' \
                 .format(os.path.join(config.get('general',
                                                 'log_directory'),
-                                     'daligner_array_%J.log')) \
+                                     'daligner_array_%A_%a.log')) \
                 in cmd)
 
     job = mj.daligner_job_array([1, 2, 6, 7, 8, 10, 12, 13, 14, 15],
                                 config.get('general', 'database'),
                                 config.get('general', 'script_directory'))
     cmd = job.start(dryrun=True)
-    assert_true('-o daligner_array_%J.log' in cmd)
+    assert_true('-o daligner_array_%A_%a.log' in cmd)
     os.remove(job.filename)
 
 def test_file_creation():

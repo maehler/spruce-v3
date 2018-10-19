@@ -124,31 +124,36 @@ class marvel_db:
         if len(rowids) == 0:
             return
 
+        if jobid is not None:
+            query = 'UPDATE daligner_job SET jobid = ?, status = ? WHERE rowid IN ({0})' \
+                    .format(','.join('?' for ri in rowids))
+            self._c.execute(query, tuple([jobid, slurm_utils.status.pending] + rowids))
+            self._db.commit()
+            return
+
         jobids = self.get_daligner_jobids(rowids)
 
         start = time.time()
         statuses = {}
         for ri, ji in jobids.items():
-            try:
-                statuses[ri] = slurm_utils.get_job_status(ji)
-            except ValueError:
+            if ji is None:
                 statuses[ri] = slurm_utils.status.notstarted
+            else:
+                s = slurm_utils.get_job_status(ji)
+                if s is None:
+                    statuses[ri] = slurm_utils.status.notstarted
+                else:
+                    statuses[ri] = slurm_utils.get_job_status(ji)
         print('fetched status in {0}'.format(time.time() - start))
 
-        query = 'UPDATE daligner_job SET'
-        if jobid is not None:
-            query += ' jobid = ?'
-        query += '''
+        query = '''UPDATE daligner_job SET
             status = ?,
             last_update = datetime("now", "localtime")
         WHERE rowid = ?'''
 
         start = time.time()
         for ri, status in statuses.items():
-            if jobid is None:
-                self._c.execute(query, (status, ri))
-            else:
-                self._c.execute(query, (jobids[ri], status, ri))
+            self._c.execute(query, (status, ri))
         self._db.commit()
         print('updated database in {0}'.format(time.time() - start))
 
