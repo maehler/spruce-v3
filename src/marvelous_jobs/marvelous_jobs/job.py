@@ -1,6 +1,7 @@
 import hashlib
 import itertools
 import os
+import re
 from subprocess import Popen, PIPE
 
 import marvel
@@ -66,7 +67,7 @@ class marvel_job:
         output = p.communicate()
         if len(output[1].strip()) > 0:
             raise RuntimeError(output[1].decode('utf-8'))
-        self.jobid = int(output[0].strip().split()[-1])
+        self.jobid = int(re.search(r'\d+', output[0].decode('utf-8')).group(0))
         return self.jobid
 
     def cancel(self):

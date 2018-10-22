@@ -4,6 +4,7 @@ from nose.tools import assert_true
 from nose.tools import assert_false
 from nose.tools import assert_count_equal
 import os
+import time
 
 import marvelous_jobs as mj
 from marvelous_jobs.tests import db, n_blocks, config
@@ -25,6 +26,7 @@ def test_prepare_script():
                          script_directory=config.get('general', 'script_directory'),
                          log_directory=config.get('general', 'log_directory'))
 
+    time.sleep(0.1)
     job.start(dryrun=True)
     assert_equals(modtime, os.path.getmtime(job.filename))
 
@@ -33,6 +35,7 @@ def test_prepare_script():
                          config.getint('general', 'blocksize') + 10,
                          script_directory=config.get('general', 'script_directory'),
                          log_directory=config.get('general', 'log_directory'))
+    time.sleep(0.1)
     job.start(dryrun=True)
     assert_not_equals(modtime, os.path.getmtime(job.filename))
 

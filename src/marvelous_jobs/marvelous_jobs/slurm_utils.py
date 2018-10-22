@@ -66,8 +66,8 @@ def get_job_status(jobid):
         (output, err) = p.communicate()
         for line in output.splitlines():
             str_jobid, job_status = line.strip().split('|')
-            if str_jobid == jobid:
-                return job_status
+            if str_jobid == str(jobid):
+                return job_status.split()[0]
 
 def cancel_jobs(jobids):
     args = ['scancel', *map(str, jobids)]

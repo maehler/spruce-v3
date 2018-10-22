@@ -233,7 +233,11 @@ def update_daligner_queue():
     if len(jobs_to_queue) == 0:
         return
 
-    jobid = submit_daligner_jobs(jobs_to_queue, config, db.get_masking_jobid())
+    try:
+        jobid = submit_daligner_jobs(jobs_to_queue, config, db.get_masking_jobid())
+    except RuntimeError as rte:
+        print('error: job submission failed\n{0}'.format(rte), file=sys.stderr)
+        sys.exit(1)
     db.update_daligner_jobs(jobs_to_queue, jobid=jobid)
 
 def stop_daligner(status=(slurm_utils.status.running,
