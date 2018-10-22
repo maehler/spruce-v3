@@ -69,6 +69,12 @@ class marvel_db:
         name, coverage = c.fetchone()
         return cls(filename, name, coverage, False)
 
+    def begin_exclusive(self):
+        self._c.execute('BEGIN EXCLUSIVE')
+
+    def stop_exclusive(self):
+        self._c.execute('COMMIT')
+
     def remove_blocks(self):
         self._c.execute('DELETE FROM block')
         self._db.commit()
@@ -176,6 +182,34 @@ class marvel_db:
         self._c.execute(query, args)
 
         return [j[0] for j in self._c.fetchall()]
+
+    def reserve_daligner_jobs(self, max_jobs=None):
+        self.begin_exclusive()
+        rowids = self.get_daligner_jobs(max_jobs=max_jobs,
+                                        status=slurm_utils.status.notstarted)
+        query = '''SELECT rowid, block_id1, block_id2
+            FROM daligner_job
+            WHERE rowid IN ({0})'''.format(','.join('?' for ri in rowids))
+        self._c.execute(query, tuple(rowids))
+        jobs = self._c.fetchall()
+        query = '''UPDATE daligner_job
+            SET status = "{0}"
+            WHERE rowid IN ({1})'''.format(slurm_utils.status.reserved,
+                                           ','.join('?' for ri in rowids))
+        self._c.execute(query, tuple(rowids))
+        self.stop_exclusive()
+
+        return [{
+            'rowid': row[0],
+            'block_id1': row[1],
+            'block_id2': row[2]
+        } for row in jobs]
+
+    def cancel_daligner_reservation(self):
+        query = 'UPDATE daligner_job SET status = ? WHERE status = ?'
+        self._c.execute(query, (slurm_utils.status.notstarted,
+                                slurm_utils.status.reserved))
+        self._db.commit()
 
     def add_prepare_job(self):
         self._c.execute('''INSERT INTO prepare_job (last_update)

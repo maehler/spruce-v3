@@ -1,10 +1,11 @@
-import marvelous_jobs as mj
 from nose.tools import assert_equals
 from nose.tools import assert_is_instance
 from nose.tools import assert_dict_equal
 from nose.tools import with_setup
+import threading
 
-from marvelous_jobs.tests import db, n_blocks, n_daligner_jobs
+import marvelous_jobs as mj
+from marvelous_jobs.tests import config, db, n_blocks, n_daligner_jobs
 
 def set_dummy_jobs():
     query1 = '''UPDATE daligner_job
@@ -71,3 +72,54 @@ def test_daligner_jobids():
     jobs = db.get_daligner_jobs(5, status=mj.slurm_utils.status.completed)
     jobids = db.get_daligner_jobids(jobs)
     assert_dict_equal(jobids, {1: '1_1', 2: '1_2', 3: '1_3', 4: '1_4', 5: '1_5'})
+
+@with_setup(set_dummy_jobs, reset_dummy_jobs)
+def test_reserving_jobs():
+    jobs = db.reserve_daligner_jobs(5)
+    reserved_jobs = db.get_daligner_jobs(status=mj.slurm_utils.status.reserved)
+    assert_equals(len(jobs), 5)
+    assert_equals(len(reserved_jobs), 5)
+
+    db.cancel_daligner_reservation()
+    reserved_jobs = db.get_daligner_jobs(status=mj.slurm_utils.status.reserved)
+    assert_equals(len(reserved_jobs), 0)
+
+@with_setup(set_dummy_jobs, reset_dummy_jobs)
+def test_reserving_jobs_in_parallel():
+    class dbworker(threading.Thread):
+        def __init__(self, n_jobs, config):
+            super().__init__()
+            self.n_jobs = n_jobs
+            self.config = config
+            self.jobs = []
+        def run(self):
+            local_db = mj.marvel_db.from_file(self.config.get('general', 'database'))
+            self.jobs = local_db.reserve_daligner_jobs(self.n_jobs)
+
+    jobs_per_thread = 100
+    n_threads = 10
+    threads = []
+    for i in range(n_threads):
+        t = dbworker(jobs_per_thread, config)
+        threads.append(t)
+
+    for t in threads:
+        t.start()
+
+    results = []
+    for t in threads:
+        t.join()
+        results.append(t.jobs)
+
+    assert_equals(len(results), n_threads)
+    assert_equals(len(results[0]), jobs_per_thread)
+    reserved_jobs = db.get_daligner_jobs(status=mj.slurm_utils.status.reserved)
+    assert_equals(len(reserved_jobs), n_threads * jobs_per_thread)
+
+    all_rowids = [x['rowid'] for y in results for x in y]
+    assert_equals(len(all_rowids), n_threads * jobs_per_thread)
+    assert_equals(len(set(all_rowids)), len(all_rowids))
+
+    db.cancel_daligner_reservation()
+    reserved_jobs = db.get_daligner_jobs(status=mj.slurm_utils.status.reserved)
+    assert_equals(len(reserved_jobs), 0)

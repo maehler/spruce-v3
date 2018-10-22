@@ -10,6 +10,7 @@ class status:
     configuring = 'CONFIGURING'
     failed = 'FAILED'
     notstarted = 'NOTSTARTED' # not a slurm job state
+    reserved = 'RESERVED' # not a slurm job state
     timeout = 'TIMEOUT'
     cancelled = 'CANCELLED'
 
