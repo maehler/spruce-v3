@@ -369,6 +369,8 @@ class marvel_db:
                         self.n_daligner_jobs(slurm_utils.status.completed),
                     'daligner jobs pending':
                         self.n_daligner_jobs(slurm_utils.status.pending),
+                    'daligner jobs reserved':
+                        self.n_daligner_jobs(slurm_utils.status.reserved),
                     'daligner jobs cancelled':
                         self.n_daligner_jobs(slurm_utils.status.cancelled),
                     'daligner jobs failed':

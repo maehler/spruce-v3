@@ -265,6 +265,19 @@ def stop_daligner(status=(slurm_utils.status.running,
 
     print('')
 
+def reserve_daligner(n_jobs, cancel=False):
+    config = mc()
+    db = get_database()
+
+    if cancel:
+        db.cancel_daligner_reservation()
+        return
+
+    jobs = db.reserve_daligner_jobs(n_jobs)
+
+    for j in jobs:
+        print('{rowid}\t{block_id1}\t{block_id2}'.format(**j))
+
 def start_mask(threads=4, port=12345, constraint=None, cluster=None):
     config = mc()
     db = get_database()
@@ -552,6 +565,14 @@ def parse_args():
     # daligner stop
     dalign_stop = dalign_subparsers.add_parser('stop', help='stop daligner jobs')
 
+    # daligner list
+    dalign_reserve = dalign_subparsers.add_parser('reserve', help='reserve '
+                                                  'daligner jobs')
+    dalign_reserve.add_argument('-n', help='maximum number of jobs to reserve '
+                                '(default: 1)', default=1, type=int)
+    dalign_reserve.add_argument('--cancel', help='cancel all active '
+                                'reservations', action='store_true')
+
     # Update status and restart jobs if necessary
     fix_parser = subparsers.add_parser('fix', help='Update and restart jobs')
 
@@ -577,6 +598,10 @@ def parse_args():
         if not positive_integer(args.port):
             parser.error('port must be a positive non-zero integer')
             parser.error('{0} is not a valid node'.format(args.node))
+
+    if args.subcommand == 'daligner' and args.subsubcommand == 'reserve':
+        if not positive_integer(args.n):
+            parser.error('number of jobs must be a positive non-zero integer')
 
     if args.subcommand is None:
         parser.parse_args(['-h'])
@@ -612,6 +637,8 @@ def main():
         update_daligner_queue()
     if args.subcommand == 'daligner' and args.subsubcommand == 'stop':
         stop_daligner()
+    if args.subcommand == 'daligner' and args.subsubcommand == 'reserve':
+        reserve_daligner(n_jobs=args.n, cancel=args.cancel)
     if args.subcommand == 'fix':
         update_and_restart()
     if args.subcommand == 'info':
