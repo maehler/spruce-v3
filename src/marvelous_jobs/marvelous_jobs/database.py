@@ -38,7 +38,7 @@ class marvel_db:
                                  priority INT NOT NULL,
                                  status TEXT NOT NULL DEFAULT 'NOTSTARTED',
                                  use_masking INT NOT NULL DEFAULT 1,
-                                 jobid INT,
+                                 jobid TEXT,
                                  last_update TEXT,
                                  PRIMARY KEY(block_id1, block_id2),
                                  FOREIGN KEY(block_id1) REFERENCES block(id),
@@ -120,8 +120,7 @@ class marvel_db:
         query = 'SELECT rowid, jobid FROM daligner_job WHERE rowid IN ({0})' \
                 .format(','.join('?' for x in rowids))
         self._c.execute(query, tuple(rowids))
-        return {x[0]: '{0}_{1}'.format(x[1], x[0]) \
-                if x[1] is not None else None for x in self._c.fetchall()}
+        return {x[0]: x[1] for x in self._c.fetchall()}
 
     def update_daligner_jobs(self, rowids, jobid=None):
         if type(rowids) is not list:

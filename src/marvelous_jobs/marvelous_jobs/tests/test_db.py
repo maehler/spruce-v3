@@ -9,13 +9,14 @@ from marvelous_jobs.tests import config, db, n_blocks, n_daligner_jobs
 
 def set_dummy_jobs():
     query1 = '''UPDATE daligner_job
-        SET jobid = 1, status = "COMPLETED"
+        SET jobid = "1_" || rowid, status = "COMPLETED"
         WHERE rowid <= 100'''
     db._c.execute(query1)
     query2 = '''UPDATE daligner_job
-        SET jobid = 2, status = "RUNNING"
-        WHERE rowid > 100 AND rowid <= 200'''
-    db._c.execute(query2)
+        SET jobid = "2_" || ?, status = "RUNNING"
+        WHERE rowid = ?'''
+    for i, ri in zip(range(1, 101), range(101, 201)):
+        db._c.execute(query2, (i, ri))
     db._db.commit()
 
 def reset_dummy_jobs():
@@ -66,8 +67,8 @@ def test_update_daligner_jobs():
 def test_daligner_jobids():
     jobs = db.get_daligner_jobs(5, status=mj.slurm_utils.status.running)
     jobids = db.get_daligner_jobids(jobs)
-    assert_dict_equal(jobids, {101: '2_101', 102: '2_102', 103: '2_103',
-                               104: '2_104', 105: '2_105'})
+    assert_dict_equal(jobids, {101: '2_1', 102: '2_2', 103: '2_3',
+                               104: '2_4', 105: '2_5'})
 
     jobs = db.get_daligner_jobs(5, status=mj.slurm_utils.status.completed)
     jobids = db.get_daligner_jobids(jobs)

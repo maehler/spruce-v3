@@ -128,12 +128,14 @@ class daligner_job_array(marvel_job):
 
     filename = 'daligner_array.sh'
 
-    def __init__(self, rowids, database_filename, script_directory=None,
-                 log_directory=None, masking_jobid=None, masking_port=None,
-                 account=None, timelimit='1:00:00', verbose=True,
-                 identity=True, tuple_suppression_frequency=20,
+    def __init__(self, n_tasks, database_filename, script_directory=None,
+                 log_directory=None, jobs_per_task=100, masking_jobid=None,
+                 masking_port=None,account=None, timelimit='1-00:00:00',
+                 verbose=True, identity=True, tuple_suppression_frequency=20,
                  correlation_rate=0.7, threads=4):
-        self.rowids = rowids
+        self.n_tasks = n_tasks
+        self.jobs_per_task = jobs_per_task
+        self.array_indices = range(1, n_tasks + 1)
         self.use_masking_server = masking_jobid is not None
         if script_directory is None:
             self.filename = daligner_job_array.filename
@@ -148,14 +150,10 @@ class daligner_job_array(marvel_job):
                                         .format(os.path.splitext(daligner_job_array.filename)[0]))
 
         args = [
+            # Setup
+            ['njobs=$1'],
             ['project=$(sqlite3 {0} "SELECT name FROM project")' \
                 .format(database_filename)],
-            ['block1=$(sqlite3 {0}'.format(database_filename),
-             '"SELECT block_id1 FROM daligner_job',
-             'WHERE rowid = $SLURM_ARRAY_TASK_ID")'],
-            ['block2=$(sqlite3 {0}'.format(database_filename),
-             '"SELECT block_id2 FROM daligner_job',
-             'WHERE rowid = $SLURM_ARRAY_TASK_ID")'],
             [],
             # Masking server
             ['maskip=$(sqlite3 {0} "SELECT ip FROM masking_job")' \
@@ -167,7 +165,18 @@ class daligner_job_array(marvel_job):
             ['fi'],
             [],
             # daligner
-            [os.path.join(marvel.config.PATH_BIN, 'daligner'),
+            ['marvelous_jobs', 'daligner', 'reserve', '-n', '"${njobs}"',
+             '|', 'while', 'read', '-ra', 'line;', 'do'],
+            ['\trowid=${line[0]}'],
+            ['\tblock1=${line[1]}'],
+            ['\tblock2=${line[2]}'],
+            # Set the job ID for the started jobs
+            ['\tsqlite3 {0} "UPDATE daligner_job ' + \
+             'SET status = {0}, ' + \
+             'jobid=${{SLURM_ARRAY_JOB_ID}}_${{SLURM_ARRAY_TASK_ID}} WHERE ' + \
+             'rowid = ${{rowid}}"'.format(database_filename,
+                                          mj.slurm_utils.status.running)],
+            ['\t{0}'.format(os.path.join(marvel.config.PATH_BIN, 'daligner')),
              '-v' if verbose else '',
              '-I' if identity else '',
              '-t', tuple_suppression_frequency,
@@ -176,7 +185,8 @@ class daligner_job_array(marvel_job):
              '${{maskip}}:{0}'.format(masking_port) \
                 if self.use_masking_server else '',
              '-j', threads,
-             '"${project}.${block1}"', '"${project}.${block2}"']
+             '"${project}.${block1}"', '"${project}.${block2}"'],
+            ['done']
         ]
 
         super().__init__(args, 'daligner_array',
@@ -186,11 +196,11 @@ class daligner_job_array(marvel_job):
                          cores=threads,
                          after=masking_jobid,
                          account=account,
-                         array=self.rowid_str())
+                         array=self._array_index_str())
 
-    def rowid_str(self):
+    def _array_index_str(self):
         id_groups = []
-        for k, g in itertools.groupby(enumerate(self.rowids),
+        for k, g in itertools.groupby(enumerate(self.array_indices),
                                       lambda x: x[0] - x[1]):
             group = list(map(lambda x: x[1], g))
             gmin = min(group)
@@ -200,6 +210,9 @@ class daligner_job_array(marvel_job):
             else:
                 id_groups.append('{0}-{1}'.format(gmin, gmax))
         return ','.join(id_groups)
+
+    def start(self, dryrun=False, force_write=False):
+        return super().start(dryrun, force_write, self.jobs_per_task)
 
 class daligner_job(marvel_job):
 
