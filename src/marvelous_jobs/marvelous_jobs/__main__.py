@@ -25,7 +25,7 @@ def get_database():
     return db
 
 def init(name, coverage, account=None, directory='.', force=False,
-         n_jobs=3000):
+         n_jobs=1000):
     if is_project(directory) and not force:
         print('error: project is already initialised, delete '
               '`marveldb` or use --force if you want to start over',
@@ -230,23 +230,19 @@ def update_daligner_queue():
         print('error: no jobs left to queue', file=sys.stderr)
         sys.exit(1)
 
-    max_jobs = min(jobs_not_started,
-                   config.getint('general', 'max_number_of_jobs'))
     jobs_per_task = config.getint('daligner', 'jobs_per_task')
-    queued_jobs = db.n_daligner_jobs(slurm_utils.status.reserved,
-                                     slurm_utils.status.running,
-                                     slurm_utils.status.pending,
-                                     slurm_utils.status.completing,
-                                     slurm_utils.status.configuring)
+    max_tasks = min(jobs_not_started // jobs_per_task,
+                   config.getint('general', 'max_number_of_jobs'))
+    queued_tasks = db.get_n_running_tasks()
 
     if db.any_using_masking():
-        queued_jobs += 1
+        queued_tasks += 1
 
-    if max_jobs < jobs_per_task:
+    if max_tasks == 0:
         tasks_to_queue = 1
-        print('Queuing {0} jobs...'.format(max_jobs - queued_jobs))
+        print('Queuing {0} jobs...'.format(jobs_not_started))
     else:
-        tasks_to_queue = (max_jobs - queued_jobs) // jobs_per_task
+        tasks_to_queue = max_tasks - queued_tasks
         print('Queuing {0} jobs...'.format(tasks_to_queue * jobs_per_task))
 
     if tasks_to_queue == 0:
@@ -526,9 +522,9 @@ def parse_args():
                              ' the project (default: 30)', default=30,
                              type=int)
     init_parser.add_argument('-n', '--max-jobs', help='maximum number of '
-                             'jobs allowed to be submitted at any point '
-                             '(default: 3000)',
-                             type=int, default=3000)
+                             'jobs allowed to be submitted in a single array '
+                             '(default: 1000)',
+                             type=int, default=1000)
     init_parser.add_argument('directory', help='directory where to '
                              'initialise the run (default: .)',
                              default='.', nargs='?')
@@ -667,7 +663,6 @@ def parse_args():
     if args.subcommand == 'daligner' and args.subsubcommand == 'start':
         if not positive_integer(args.jobs_per_task):
             parser.error('jobs per task must be a positive non-zero integer')
-        if args.jobs_per_task > 1000:
             parser.error('jobs per task cannot exceed 1000')
     if args.subcommand == 'daligner' and args.subsubcommand == 'reserve':
         if not positive_integer(args.n):
@@ -696,7 +691,7 @@ def main():
                 log_directory=args.log_directory,
                 force=args.force)
     if args.subcommand == 'mask' and args.subsubcommand == 'start':
-        start_mask(args.threads, args.port, args.constraint, cluster=None)
+        start_mask(args.threads, args.port, args.constraint, args.cluster)
     if args.subcommand == 'mask' and args.subsubcommand == 'status':
         mask_status()
     if args.subcommand == 'mask' and args.subsubcommand == 'stop':

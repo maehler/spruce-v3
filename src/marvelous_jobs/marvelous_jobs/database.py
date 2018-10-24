@@ -211,6 +211,16 @@ class marvel_db:
                         (slurm_utils.status.notstarted,) + tuple(rowids))
         self._db.commit()
 
+    def get_n_running_tasks(self):
+        query = '''SELECT COUNT(DISTINCT jobid)
+        FROM daligner_job WHERE status IN (?, ?, ?, ?, ?)'''
+        self._c.execute(query, (slurm_utils.status.running,
+                                slurm_utils.status.reserved,
+                                slurm_utils.status.pending,
+                                slurm_utils.status.completing,
+                                slurm_utils.status.configuring))
+        return self._c.fetchone()[0]
+
     def cancel_daligner_reservation(self):
         query = 'UPDATE daligner_job SET status = ? WHERE status = ?'
         self._c.execute(query, (slurm_utils.status.notstarted,
