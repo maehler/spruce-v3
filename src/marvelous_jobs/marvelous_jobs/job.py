@@ -150,7 +150,7 @@ class daligner_job_array(marvel_job):
             self.logfile = os.path.join(log_directory, '{0}_%A_%a.log' \
                                         .format(os.path.splitext(daligner_job_array.filename)[0]))
 
-        sqlite_timeout = '-init <(echo .timeout 10000)'
+        sqlite_timeout = '-init <(echo .timeout 30000)'
         args = [
             # Setup
             ['njobs=$1'],

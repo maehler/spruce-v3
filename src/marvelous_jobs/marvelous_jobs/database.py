@@ -10,7 +10,7 @@ class marvel_db:
 
     def __init__(self, filename, name, coverage, force=False):
         is_new = not os.path.exists(filename)
-        self._db = sqlite3.connect(filename)
+        self._db = sqlite3.connect(filename, timeout=30.0)
         self._db.row_factory = sqlite3.Row
         self._c = self._db.cursor()
 
