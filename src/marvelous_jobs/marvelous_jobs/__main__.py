@@ -48,7 +48,8 @@ def init(name, coverage, account=None, directory='.', force=False,
             'tuple_suppression_frequency': 20,
             'correlation_rate': 0.7,
             'threads': 4,
-            'timelimit': '1-00:00:00'
+            'timelimit': '1-00:00:00',
+            'jobs_per_task': 100
         },
         'DMserver': {
             'threads': 4,
@@ -99,10 +100,16 @@ def prepare(fasta, blocksize, script_directory, log_directory, force=False):
     jobid = job.start()
     db.update_prepare_job_id(jobid)
 
-def start_daligner(force=False, no_masking=False):
+def start_daligner(jobs_per_task=100, force=False, no_masking=False):
     config = mc()
     db = get_database()
     update_statuses()
+
+    if jobs_per_task > config.getint('general', 'max_number_of_jobs'):
+        print('error: number of jobs per task ({0}) cannot be more than the '
+              'maximum number of jobs ({1})' \
+              .format(jobs_per_task, config.get('general', 'max_number_of_jobs')))
+        sys.exit(1)
 
     if not no_masking and \
            (not db.has_masking_job() or \
@@ -121,6 +128,8 @@ def start_daligner(force=False, no_masking=False):
             print('error: database preparation is not done yet, status is {0}'\
                   .format(db.prepare_status()), file=sys.stderr)
         exit(1)
+
+    config.set('daligner', 'jobs_per_task', jobs_per_task)
 
     projname = db.get_project_name()
 
@@ -178,15 +187,15 @@ def start_daligner(force=False, no_masking=False):
 
     print()
 
-    update_daligner_queue()
-
-def get_daligner_array(rowids, config, masking_jobid=None):
-    job_array = daligner_job_array(rowids,
+def get_daligner_array(ntasks, config, masking_jobid=None):
+    job_array = daligner_job_array(ntasks,
                                    config.get('general', 'database'),
                                    script_directory=config.get('general',
                                                                'script_directory'),
                                    log_directory=config.get('general',
                                                             'log_directory'),
+                                   jobs_per_task=config.get('daligner',
+                                                            'jobs_per_task'),
                                    masking_jobid=masking_jobid,
                                    masking_port=config.getint('DMserver',
                                                               'port'),
@@ -205,10 +214,10 @@ def get_daligner_array(rowids, config, masking_jobid=None):
 
     return job_array
 
-def submit_daligner_jobs(rowids, config, masking_jobid=None):
-    if len(rowids) == 0:
+def submit_daligner_jobs(ntasks, config, masking_jobid=None):
+    if ntasks == 0:
         return
-    job_array = get_daligner_array(rowids, config, masking_jobid)
+    job_array = get_daligner_array(ntasks, config, masking_jobid)
     return job_array.start()
 
 def update_daligner_queue():
@@ -216,8 +225,16 @@ def update_daligner_queue():
     db = get_database()
     update_statuses()
 
-    max_jobs = config.getint('general', 'max_number_of_jobs')
-    queued_jobs = db.n_daligner_jobs(slurm_utils.status.running,
+    jobs_not_started = db.n_daligner_jobs(slurm_utils.status.notstarted)
+    if jobs_not_started == 0:
+        print('error: no jobs left to queue', file=sys.stderr)
+        sys.exit(1)
+
+    max_jobs = min(jobs_not_started,
+                   config.getint('general', 'max_number_of_jobs'))
+    jobs_per_task = config.getint('daligner', 'jobs_per_task')
+    queued_jobs = db.n_daligner_jobs(slurm_utils.status.reserved,
+                                     slurm_utils.status.running,
                                      slurm_utils.status.pending,
                                      slurm_utils.status.completing,
                                      slurm_utils.status.configuring)
@@ -225,20 +242,21 @@ def update_daligner_queue():
     if db.any_using_masking():
         queued_jobs += 1
 
-    jobs_to_queue = db.get_daligner_jobs(max_jobs - queued_jobs,
-                                         slurm_utils.status.notstarted)
+    if max_jobs < jobs_per_task:
+        tasks_to_queue = 1
+        print('Queuing {0} jobs...'.format(max_jobs - queued_jobs))
+    else:
+        tasks_to_queue = (max_jobs - queued_jobs) // jobs_per_task
+        print('Queuing {0} jobs...'.format(tasks_to_queue * jobs_per_task))
 
-    print('Queuing {0} jobs...'.format(len(jobs_to_queue)))
-
-    if len(jobs_to_queue) == 0:
+    if tasks_to_queue == 0:
         return
 
     try:
-        jobid = submit_daligner_jobs(jobs_to_queue, config, db.get_masking_jobid())
+        jobid = submit_daligner_jobs(tasks_to_queue, config, db.get_masking_jobid())
     except RuntimeError as rte:
         print('error: job submission failed\n{0}'.format(rte), file=sys.stderr)
         sys.exit(1)
-    db.update_daligner_jobs(jobs_to_queue, jobid=jobid)
 
 def stop_daligner(status=(slurm_utils.status.running,
                           slurm_utils.status.pending)):
@@ -552,6 +570,9 @@ def parse_args():
     # daligner start
     dalign_start = dalign_subparsers.add_parser('start', help='initialise '
                                                 'daligner jobs')
+    dalign_start.add_argument('-n', '--jobs-per-task', help='number of jobs '
+                              'that each task in a job array will run',
+                              type=int, default=100)
     dalign_start.add_argument('-f', '--force', help='forcefully add daligner '
                               'jobs, removing any existing jobs',
                               action='store_true')
@@ -599,6 +620,11 @@ def parse_args():
             parser.error('port must be a positive non-zero integer')
             parser.error('{0} is not a valid node'.format(args.node))
 
+    if args.subcommand == 'daligner' and args.subsubcommand == 'start':
+        if not positive_integer(args.jobs_per_task):
+            parser.error('jobs per task must be a positive non-zero integer')
+        if args.jobs_per_task > 1000:
+            parser.error('jobs per task cannot exceed 1000')
     if args.subcommand == 'daligner' and args.subsubcommand == 'reserve':
         if not positive_integer(args.n):
             parser.error('number of jobs must be a positive non-zero integer')
@@ -632,7 +658,7 @@ def main():
     if args.subcommand == 'mask' and args.subsubcommand == 'stop':
         stop_mask()
     if args.subcommand == 'daligner' and args.subsubcommand == 'start':
-        start_daligner(args.force, args.no_masking)
+        start_daligner(args.jobs_per_task, args.force, args.no_masking)
     if args.subcommand == 'daligner' and args.subsubcommand == 'update':
         update_daligner_queue()
     if args.subcommand == 'daligner' and args.subsubcommand == 'stop':

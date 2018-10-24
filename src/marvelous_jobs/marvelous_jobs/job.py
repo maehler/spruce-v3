@@ -149,15 +149,16 @@ class daligner_job_array(marvel_job):
             self.logfile = os.path.join(log_directory, '{0}_%A_%a.log' \
                                         .format(os.path.splitext(daligner_job_array.filename)[0]))
 
+        sqlite_timeout = '-init <(echo .timeout 10000)'
         args = [
             # Setup
             ['njobs=$1'],
-            ['project=$(sqlite3 {0} "SELECT name FROM project")' \
-                .format(database_filename)],
+            ['project=$(sqlite3 {0} {1} "SELECT name FROM project")' \
+                .format(sqlite_timeout, database_filename)],
             [],
             # Masking server
-            ['maskip=$(sqlite3 {0} "SELECT ip FROM masking_job")' \
-                .format(database_filename)],
+            ['maskip=$(sqlite3 {0} {1} "SELECT ip FROM masking_job")' \
+                .format(sqlite_timeout, database_filename)],
             ['if [[ {0} = true ]] && [[ -z $maskip ]]; then' \
                 .format('true' if self.use_masking_server else 'false')],
             ['\techo >&2 "error: no masking server available"'],
@@ -171,11 +172,12 @@ class daligner_job_array(marvel_job):
             ['\tblock1=${line[1]}'],
             ['\tblock2=${line[2]}'],
             # Set the job ID for the started jobs
-            ['\tsqlite3 {0} "UPDATE daligner_job ' + \
-             'SET status = {0}, ' + \
-             'jobid=${{SLURM_ARRAY_JOB_ID}}_${{SLURM_ARRAY_TASK_ID}} WHERE ' + \
-             'rowid = ${{rowid}}"'.format(database_filename,
-                                          mj.slurm_utils.status.running)],
+            ['\tsqlite3 {0} {1} "UPDATE daligner_job '.format(sqlite_timeout, database_filename) + \
+             'SET status = \'{0}\', '.format(mj.slurm_utils.status.running) + \
+             'jobid = \'${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}\', ' + \
+             'last_update = datetime(\'now\', \'localtime\') ' + \
+             'WHERE ' + \
+             'rowid = ${rowid}"'],
             ['\t{0}'.format(os.path.join(marvel.config.PATH_BIN, 'daligner')),
              '-v' if verbose else '',
              '-I' if identity else '',
