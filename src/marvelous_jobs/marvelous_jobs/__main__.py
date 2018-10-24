@@ -569,7 +569,6 @@ def parse_args():
                             type=int)
     mask_start.add_argument('-p', '--port', help='port to listen to (default: '
                             '12345)', type=int)
-    mask_start.add_argument('-M', '--cluster', help='cluster to run on')
 
     # Stop masking server
     mask_stop = mask_subparsers.add_parser('stop', help='stop masking server')
@@ -664,7 +663,7 @@ def main():
                 log_directory=args.log_directory,
                 force=args.force)
     if args.subcommand == 'mask' and args.subsubcommand == 'start':
-        start_mask(args.threads, args.port, args.constraint, args.cluster)
+        start_mask(args.threads, args.port, args.constraint, cluster=None)
     if args.subcommand == 'mask' and args.subsubcommand == 'status':
         mask_status()
     if args.subcommand == 'mask' and args.subsubcommand == 'stop':
