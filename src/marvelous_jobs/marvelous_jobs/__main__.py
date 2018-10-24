@@ -453,12 +453,6 @@ def update_and_restart():
     if len(failed_jobs) > 0:
         db.reset_daligner_jobs(failed_jobs)
 
-    if masking_ip_changed:
-        pending_jobs = db.get_daligner_jobs(status=(slurm_utils.status.pending))
-        if len(pending_jobs) > 0:
-            slurm_utils.cancel_jobs(pending_jobs)
-            db.reset_daligner_jobs(pending_jobs)
-
     update_statuses()
 
 def update_statuses():
