@@ -109,53 +109,31 @@ marvelous_jobs info
 ### `marvelous_jobs`
 
 ```
-usage: marvelous_jobs mask start [-h] -w NODE [-t THREADS] [-p PORT]
+usage: marvelous_jobs [-h] [--version] sub-command ...
+
+Job manager for MARVEL.
+
+positional arguments:
+  sub-command
+    init       Initialise a new project
+    info       Show project info
+    prepare    Prepare data files
+    mask       Masking server
+    daligner   Run daligner
+    fix        Update and reset jobs
 
 optional arguments:
-  -h, --help            show this help message and exit
-  -w NODE, --node NODE  node where to run the process
-  -t THREADS, --threads THREADS
-                        number of worker threads (default: 4)
-  -p PORT, --port PORT  port to listen to (default: 12345)
-(marvel) [niklasm@rackham1 marvel_test]$ marvelous_jobs -h
-usage: marvelous_jobs [-h] {init,info,prepare,mask,daligner,fix} ...
-
-Job manager for MARVEL
-
-optional arguments:
-  -h, --help            show this help message and exit
-
-subcommands:
-  {init,info,prepare,mask,daligner,fix}
-    init                Initialise a new project
-    info                Show project info
-    prepare             Prepare data files
-    mask                Masking server
-    daligner            Run daligner
-    fix                 Update and restart jobs
+  -h, --help   show this help message and exit
+  --version    show program's version number and exit
 ```
 
 ### `marvelous_jobs init`
 
 ```
-usage: marvelous_jobs [-h] {init,info,prepare,mask,daligner,fix} ...
-
-Job manager for MARVEL
-
-optional arguments:
-  -h, --help            show this help message and exit
-
-subcommands:
-  {init,info,prepare,mask,daligner,fix}
-    init                Initialise a new project
-    info                Show project info
-    prepare             Prepare data files
-    mask                Masking server
-    daligner            Run daligner
-    fix                 Update and restart jobs
-(marvel) [niklasm@rackham1 marvel_test]$ marvelous_jobs init -h
-usage: marvelous_jobs init [-h] [-A ACCOUNT] [-x COVERAGE] [-f]
+usage: marvelous_jobs init [-h] [-A ACCOUNT] [-x COVERAGE] [-n MAX_JOBS] [-f]
                            name [directory]
+
+Initialise a new MARVEL project.
 
 positional arguments:
   name                  name of the project
@@ -167,6 +145,9 @@ optional arguments:
                         SLURM account where jobs should be run
   -x COVERAGE, --coverage COVERAGE
                         sequencing coverage of the project (default: 30)
+  -n MAX_JOBS, --max-jobs MAX_JOBS
+                        maximum number of jobs allowed to be submitted at any
+                        point (default: 3000)
   -f, --force           force overwrite of existing database
 ```
 
@@ -174,6 +155,8 @@ optional arguments:
 
 ```
 usage: marvelous_jobs info [-h]
+
+Show project information.
 
 optional arguments:
   -h, --help  show this help message and exit
@@ -185,6 +168,9 @@ optional arguments:
 usage: marvelous_jobs prepare [-h] [-s N] [-f] [-d SCRIPT_DIRECTORY]
                               [-l LOG_DIRECTORY]
                               fasta
+
+Prepare sequence data for MARVEL by splitting it into blocks and converting it
+to an appropriate format.
 
 positional arguments:
   fasta                 input reads in FASTA format
@@ -202,24 +188,29 @@ optional arguments:
 ### `marvelous_jobs mask`
 
 ```
-usage: marvelous_jobs mask [-h] {status,start,stop} ...
+usage: marvelous_jobs mask [-h] masking-command ...
+
+Manage the masking server.
+
+positional arguments:
+  masking-command
+    status         masking server status
+    start          start masking server
+    stop           stop masking server
 
 optional arguments:
-  -h, --help           show this help message and exit
-
-masking command:
-  {status,start,stop}
-    status             masking server status
-    start              start masking server
-    stop               stop masking server
+  -h, --help       show this help message and exit
 ```
 
 ```
-usage: marvelous_jobs mask start [-h] -w NODE [-t THREADS] [-p PORT]
+usage: marvelous_jobs mask start [-h] [-C CONSTRAINT] [-t THREADS] [-p PORT]
+
+Start the masking server.
 
 optional arguments:
   -h, --help            show this help message and exit
-  -w NODE, --node NODE  node where to run the process
+  -C CONSTRAINT, --constraint CONSTRAINT
+                        node constraint
   -t THREADS, --threads THREADS
                         number of worker threads (default: 4)
   -p PORT, --port PORT  port to listen to (default: 12345)
@@ -228,6 +219,8 @@ optional arguments:
 ```
 usage: marvelous_jobs mask stop [-h]
 
+Stop the masking server.
+
 optional arguments:
   -h, --help  show this help message and exit
 ```
@@ -235,6 +228,75 @@ optional arguments:
 ```
 usage: marvelous_jobs mask status [-h]
 
+Show the status of the masking server.
+
 optional arguments:
   -h, --help  show this help message and exit
+```
+
+### `marvelous_jobs daligner`
+
+```
+usage: marvelous_jobs daligner [-h] daligner-command ...
+
+Manage daligner jobs.
+
+positional arguments:
+  daligner-command
+    start           initialise daligner jobs
+    update          submit daligner jobs
+    stop            stop daligner jobs
+    reserve         reserve daligner jobs
+
+optional arguments:
+  -h, --help        show this help message and exit
+```
+
+```
+usage: marvelous_jobs daligner start [-h] [-n JOBS_PER_TASK] [-f]
+                                     [--no-masking]
+
+Initialise daligner jobs by populating the database with the blocks and the
+individual jobs that will be run.
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -n JOBS_PER_TASK, --jobs-per-task JOBS_PER_TASK
+                        number of jobs that each task in a job array will run
+  -f, --force           forcefully add daligner jobs, removing any existing
+                        jobs
+  --no-masking          do not use the masking server
+```
+
+```
+usage: marvelous_jobs daligner update [-h]
+
+Queue a new set of daligner jobs. The number of jobs that will be queued
+depends on the maximum number of jobs that are allowed according to the
+config.ini file
+
+optional arguments:
+  -h, --help  show this help message and exit
+```
+
+```
+usage: marvelous_jobs daligner stop [-h]
+
+Stop all currently queued, reserved, and running daligner jobs.
+
+optional arguments:
+  -h, --help  show this help message and exit
+```
+
+```
+usage: marvelous_jobs daligner reserve [-h] [-n N] [--cancel]
+
+Reserve a number of jobs that will be run soon. These will get a status of
+RESERVED, and this prevents marvelous_jobs from queuing the same jobs in
+different job arrays.
+
+optional arguments:
+  -h, --help  show this help message and exit
+  -n N        maximum number of jobs to reserve (default: 1)
+  --cancel    cancel all active reservations
 ```

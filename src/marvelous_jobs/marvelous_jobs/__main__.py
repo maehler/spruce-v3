@@ -507,16 +507,18 @@ def positive_integer(i):
     return type(i) is int and i > 0
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Job manager for MARVEL')
+    parser = argparse.ArgumentParser(description='Job manager for MARVEL.')
 
     parser.add_argument('--version', action='version',
                         version='%(prog)s v{0}'.format(__version__))
 
-    subparsers = parser.add_subparsers(title='subcommands',
-                                       dest='subcommand')
+    subparsers = parser.add_subparsers(dest='subcommand',
+                                       metavar='sub-command')
+    subparsers.required = True
 
     # Initialisation
-    init_parser = subparsers.add_parser('init', help='Initialise a new project')
+    init_parser = subparsers.add_parser('init', help='Initialise a new project',
+        description='Initialise a new MARVEL project.')
     init_parser.add_argument('name', help='name of the project')
     init_parser.add_argument('-A', '--account', help='SLURM account where '
                              'jobs should be run')
@@ -534,10 +536,13 @@ def parse_args():
                              'existing database', action='store_true')
 
     # Info
-    info_parser = subparsers.add_parser('info', help='Show project info')
+    info_parser = subparsers.add_parser('info', help='Show project info',
+        description='Show project information.')
 
     # DBprepare
-    prep_parser = subparsers.add_parser('prepare', help='Prepare data files')
+    prep_parser = subparsers.add_parser('prepare', help='Prepare data files',
+        description='Prepare sequence data for MARVEL by splitting it into '
+                    'blocks and converting it to an appropriate format.')
     prep_parser.add_argument('fasta', help='input reads in FASTA format')
     prep_parser.add_argument('-s', '--blocksize',
                              help='database block size in megabases (default: 200)',
@@ -553,16 +558,21 @@ def parse_args():
                              default=os.path.join('.', 'logs'))
 
     # Masking server
-    mask_parser = subparsers.add_parser('mask', help='Masking server')
-    mask_subparsers = mask_parser.add_subparsers(title='masking command',
-                                                 dest='subsubcommand')
+    mask_parser = subparsers.add_parser('mask', help='Masking server',
+        description='Manage the masking server.')
+    mask_subparsers = mask_parser.add_subparsers(dest='subsubcommand',
+                                                 metavar='masking-command')
+    mask_subparsers.required = True
 
     # Masking server status
     mask_status = mask_subparsers.add_parser('status', help='masking server '
-                                             'status')
+                                             'status',
+        description='Show the status of the masking server.')
 
     # Start masking server
-    mask_start = mask_subparsers.add_parser('start', help='start masking server')
+    mask_start = mask_subparsers.add_parser('start', help='start masking server',
+                                            description='Start the masking '
+                                            'server.')
     mask_start.add_argument('-C', '--constraint', help='node constraint')
     mask_start.add_argument('-t', '--threads', help='number of worker threads '
                             '(default: 4)',
@@ -571,16 +581,22 @@ def parse_args():
                             '12345)', type=int)
 
     # Stop masking server
-    mask_stop = mask_subparsers.add_parser('stop', help='stop masking server')
+    mask_stop = mask_subparsers.add_parser('stop', help='stop masking server',
+                                           description='Stop the masking server.')
 
     # daligner
-    dalign_parser = subparsers.add_parser('daligner', help='Run daligner')
-    dalign_subparsers = dalign_parser.add_subparsers(title='daligner command',
-                                                     dest='subsubcommand')
+    dalign_parser = subparsers.add_parser('daligner', help='Run daligner',
+        description='Manage daligner jobs.')
+    dalign_subparsers = dalign_parser.add_subparsers(dest='subsubcommand',
+                                                     metavar='daligner-command')
+    dalign_subparsers.required = True
 
     # daligner start
     dalign_start = dalign_subparsers.add_parser('start', help='initialise '
-                                                'daligner jobs')
+                                                'daligner jobs',
+        description='Initialise daligner jobs by populating the database '
+                    'with the blocks and the individual jobs that will be '
+                    'run.')
     dalign_start.add_argument('-n', '--jobs-per-task', help='number of jobs '
                               'that each task in a job array will run',
                               type=int, default=100)
@@ -592,21 +608,38 @@ def parse_args():
 
     # daligner update
     dalign_update = dalign_subparsers.add_parser('update', help='submit '
-                                                 'daligner jobs')
+                                                 'daligner jobs',
+        description='Queue a new set of daligner jobs. The number of jobs '
+                    'that will be queued depends on the maximum number of '
+                    'jobs that are allowed according to the config.ini file')
 
     # daligner stop
-    dalign_stop = dalign_subparsers.add_parser('stop', help='stop daligner jobs')
+    dalign_stop = dalign_subparsers.add_parser('stop', help='stop daligner jobs',
+        description='Stop all currently queued, reserved, and running daligner '
+                    'jobs.')
 
     # daligner list
     dalign_reserve = dalign_subparsers.add_parser('reserve', help='reserve '
-                                                  'daligner jobs')
+                                                  'daligner jobs',
+        description='Reserve a number of jobs that will be run soon. These '
+                    'will get a status of RESERVED, and this prevents '
+                    'marvelous_jobs from queuing the same jobs in different '
+                    'job arrays.')
     dalign_reserve.add_argument('-n', help='maximum number of jobs to reserve '
                                 '(default: 1)', default=1, type=int)
     dalign_reserve.add_argument('--cancel', help='cancel all active '
                                 'reservations', action='store_true')
 
     # Update status and restart jobs if necessary
-    fix_parser = subparsers.add_parser('fix', help='Update and restart jobs')
+    fix_parser = subparsers.add_parser('fix', help='Update and reset jobs',
+                                       description='If jobs have failed or '
+                                       'been cancelled, this function resets '
+                                       'them to have a status of NOSTARTED '
+                                       'so that they will be eligible for '
+                                       'running when running `marvelous_jobs '
+                                       'update`. Also, if for some reason '
+                                       'the masking server has stopped, it will '
+                                       'be restarted.')
 
     args = parser.parse_args()
 
