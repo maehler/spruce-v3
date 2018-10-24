@@ -47,6 +47,7 @@ class marvel_job:
         if not os.path.isfile(self.filename) or force_write:
             self.save_script()
         run_args = ['sbatch',
+                    '--parsable',
                     '--array' if 'array' in self.sbatch_args else '',
                     self.sbatch_args.get('array') \
                         if 'array' in self.sbatch_args else '',
@@ -67,7 +68,7 @@ class marvel_job:
         output = p.communicate()
         if len(output[1].strip()) > 0:
             raise RuntimeError(output[1].decode('utf-8'))
-        self.jobid = int(re.search(r'\d+', output[0].decode('utf-8')).group(0))
+        self.jobid = int(output[0].decode('utf-8').split(';')[0])
         return self.jobid
 
     def cancel(self):
