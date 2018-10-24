@@ -204,6 +204,13 @@ class marvel_db:
             'block_id2': row[2]
         } for row in jobs]
 
+    def reset_daligner_jobs(self, rowids):
+        query = 'UPDATE daligner_job SET status = ? WHERE rowid IN ({0})' \
+                .format(','.join('?' for x in rowids))
+        self._c.execute(query,
+                        (slurm_utils.status.notstarted,) + tuple(rowids))
+        self._db.commit()
+
     def cancel_daligner_reservation(self):
         query = 'UPDATE daligner_job SET status = ? WHERE status = ?'
         self._c.execute(query, (slurm_utils.status.notstarted,

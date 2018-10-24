@@ -442,25 +442,22 @@ def update_and_restart():
 
     masking_ip_changed = old_masking_ip != db.get_masking_ip()
 
-    print('Restarting failed or cancelled jobs...')
+    print('Resetting failed or cancelled jobs...')
     if masking_ip_changed:
-        print('Masking server IP changed, also restarting pending jobs...')
+        print('Masking server IP changed, also resetting pending jobs...')
 
     failed_jobs = db.get_daligner_jobs(status=(slurm_utils.status.failed,
                                                slurm_utils.status.cancelled,
                                                slurm_utils.status.timeout))
 
     if len(failed_jobs) > 0:
-        jobid = submit_daligner_jobs(failed_jobs, config, db.get_masking_jobid)
-        db.update_daligner_jobs(failed_jobs, jobid)
+        db.reset_daligner_jobs(failed_jobs)
 
     if masking_ip_changed:
         pending_jobs = db.get_daligner_jobs(status=(slurm_utils.status.pending))
         if len(pending_jobs) > 0:
             slurm_utils.cancel_jobs(pending_jobs)
-            jobid = submit_daligner_jobs(pending_jobs, config,
-                                         db.get_masking_jobid)
-            db.update_daligner_jobs(pending_jobs, jobid)
+            db.reset_daligner_jobs(pending_jobs)
 
     update_statuses()
 
