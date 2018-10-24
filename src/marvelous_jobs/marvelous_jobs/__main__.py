@@ -275,13 +275,16 @@ def stop_daligner(status=(slurm_utils.status.running,
         array_id = ji.split('_')[0]
         array_ids.add(array_id)
 
-    print('Stopping daligner jobs')
+    print('Stopping daligner jobs...')
 
-    for i, dj in enumerate(jobs, start=1):
-        dj.cancel()
-        print('\rStopping daligner jobs: {0}/{1}'.format(i, len(jobs)), end='')
+    if len(array_ids) > 0:
+        slurm_utils.cancel_jobs(array_ids)
+    # Also cancel any reservations. If jobs have been reserved,
+    # then their corresponding array has been started and will
+    # be cancelled regardless.
+    db.cancel_daligner_reservation()
 
-    print('')
+    update_statuses()
 
 def reserve_daligner(n_jobs, cancel=False):
     config = mc()
