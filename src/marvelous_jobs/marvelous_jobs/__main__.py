@@ -299,20 +299,37 @@ def reserve_daligner(n_jobs, cancel=False):
     for j in jobs:
         print('{rowid}\t{block_id1}\t{block_id2}'.format(**j))
 
-def start_mask(threads=4, port=12345, constraint=None, cluster=None):
+def start_mask(threads=None, port=None, constraint=None, cluster=None):
     config = mc()
     db = get_database()
 
     db.update_masking_job_status()
     masking_status = db.masking_status()
 
-    config.set('DMserver', 'threads', threads)
-    config.set('DMserver', 'port', port)
-    config.set('DMserver', 'constraint', constraint)
-    config.set('DMserver', 'cluster', cluster)
-    config.set('DMserver', 'checkpoint_file',
-               os.path.join(config.get('general', 'directory'),
-                            'masking_checkpoint'))
+    if threads is None and config.get('DMserver', 'threads') is None:
+        config.set('DMserver', 'threads', 4)
+    elif threads is not None:
+        config.set('DMserver', 'threads', threads)
+
+    if port is None and config.get('DMserver', 'port') is None:
+        config.set('DMserver', 'port', 12345)
+    elif port is not None:
+        config.set('DMserver', 'port', port)
+
+    if constraint is None and config.get('DMserver', 'constraint') is None:
+        config.set('DMserver', 'constraint', None)
+    elif constraint is not None:
+        config.set('DMserver', 'constraint', constraint)
+
+    if cluster is None and config.get('DMserver', 'cluster') is None:
+        config.set('DMserver', 'cluster', None)
+    elif cluster is not None:
+        config.set('DMserver', 'cluster', cluster)
+
+    if config.get('DMserver', 'checkpoint_file') is None:
+        config.set('DMserver', 'checkpoint_file',
+                   os.path.join(config.get('general', 'directory'),
+                                'masking_checkpoint'))
 
     if masking_status is not None \
        and masking_status[1] in (slurm_utils.status.running,
@@ -328,10 +345,10 @@ def start_mask(threads=4, port=12345, constraint=None, cluster=None):
                                                          'script_directory'),
                              log_directory=config.get('general',
                                                       'log_directory'),
-                             port=port,
-                             threads=threads,
-                             constraint=constraint,
-                             cluster=cluster,
+                             port=config.getint('DMserver', 'port'),
+                             threads=config.getint('DMserver', 'threads'),
+                             constraint=config.get('DMserver', 'constraint'),
+                             cluster=config.get('DMserver', 'cluster'),
                              account=config.get('general', 'account'),
                              timelimit=config.get('DMserver', 'timelimit'))
     db.add_masking_job(job)
@@ -453,6 +470,7 @@ def update_and_restart():
     if len(failed_jobs) > 0:
         db.reset_daligner_jobs(failed_jobs)
 
+
     update_statuses()
 
 def update_statuses():
@@ -548,9 +566,9 @@ def parse_args():
     mask_start.add_argument('-C', '--constraint', help='node constraint')
     mask_start.add_argument('-t', '--threads', help='number of worker threads '
                             '(default: 4)',
-                            type=int, default=4)
+                            type=int)
     mask_start.add_argument('-p', '--port', help='port to listen to (default: '
-                            '12345)', type=int, default=12345)
+                            '12345)', type=int)
     mask_start.add_argument('-M', '--cluster', help='cluster to run on')
 
     # Stop masking server
@@ -608,9 +626,9 @@ def parse_args():
             parser.error('blocksize must be a positive non-zero integer')
 
     if args.subcommand == 'mask' and args.subsubcommand == 'start':
-        if not positive_integer(args.threads):
+        if args.threads is not None and not positive_integer(args.threads):
             parser.error('number of threads must be a positive non-zero integer')
-        if not positive_integer(args.port):
+        if args.port is not None and not positive_integer(args.port):
             parser.error('port must be a positive non-zero integer')
             parser.error('{0} is not a valid node'.format(args.node))
 
