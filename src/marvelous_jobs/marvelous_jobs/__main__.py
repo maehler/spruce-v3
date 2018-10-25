@@ -691,7 +691,7 @@ def main():
                 log_directory=args.log_directory,
                 force=args.force)
     if args.subcommand == 'mask' and args.subsubcommand == 'start':
-        start_mask(args.threads, args.port, args.constraint, args.cluster)
+        start_mask(args.threads, args.port, args.constraint, cluster=None)
     if args.subcommand == 'mask' and args.subsubcommand == 'status':
         mask_status()
     if args.subcommand == 'mask' and args.subsubcommand == 'stop':
