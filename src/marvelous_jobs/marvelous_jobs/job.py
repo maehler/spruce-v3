@@ -189,6 +189,12 @@ class daligner_job_array(marvel_job):
                 if self.use_masking_server else '',
              '-j', threads,
              '"${project}.${block1}"', '"${project}.${block2}"'],
+            # Set the current job as completed
+            ['\tsqlite3 {0} {1} "UPDATE daligner_job '.format(sqlite_timeout,
+                                                              database_filename) + \
+             'SET status = \'{0}\', '.format(mj.slurm_utils.status.completed) + \
+             'last_update = datetime(\'now\', \'localtime\') ' + \
+             'WHERE rowid = ${rowid}"'],
             ['done']
         ]
 

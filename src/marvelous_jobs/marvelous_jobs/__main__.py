@@ -466,6 +466,11 @@ def update_and_restart():
     if len(failed_jobs) > 0:
         db.reset_daligner_jobs(failed_jobs)
 
+    # Remove the daligner script to avoid having old dependencies lying around
+    daligner_script = os.path.join(config.get('general', 'script_directory'),
+                                   daligner_job_array.filename)
+    if os.path.exists(daligner_script):
+        os.remove(daligner_script)
 
     update_statuses()
 
