@@ -172,6 +172,7 @@ class daligner_job_array(marvel_job):
             ['\trowid=${line[0]}'],
             ['\tblock1=${line[1]}'],
             ['\tblock2=${line[2]}'],
+            ['\techo "Starting job ${rowid}: ${project}.${block1} vs ${project}.${block2}"'],
             # Set the job ID for the started jobs
             ['\tsqlite3 {0} {1} "UPDATE daligner_job '.format(sqlite_timeout, database_filename) + \
              'SET status = \'{0}\', '.format(mj.slurm_utils.status.running) + \
