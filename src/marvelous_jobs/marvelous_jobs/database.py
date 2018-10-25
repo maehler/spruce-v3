@@ -192,7 +192,8 @@ class marvel_db:
         self._c.execute(query, tuple(rowids))
         jobs = self._c.fetchall()
         query = '''UPDATE daligner_job
-            SET status = "{0}"
+            SET status = "{0}",
+            last_update = datetime('now', 'localtime')
             WHERE rowid IN ({1})'''.format(slurm_utils.status.reserved,
                                            ','.join('?' for ri in rowids))
         self._c.execute(query, tuple(rowids))
