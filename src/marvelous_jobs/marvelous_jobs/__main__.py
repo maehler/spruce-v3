@@ -262,19 +262,14 @@ def stop_daligner(status=(slurm_utils.status.running,
     jobs = db.get_daligner_jobs(status=tuple(status))
     jobids = db.get_daligner_jobids(jobs)
 
-    # For now stop whole arrays, so if only running jobs
-    # are supposed to be stopped, also pending jobs in the
-    # that are in the same array as the running jobs will
-    # be stopped.
-    array_ids = set()
+    unique_tasks = set()
     for ji in jobids.values():
-        array_id = ji.split('_')[0]
-        array_ids.add(array_id)
+        unique_tasks.add(array_id)
 
     print('Stopping daligner jobs...')
 
-    if len(array_ids) > 0:
-        slurm_utils.cancel_jobs(array_ids)
+    if len(unique_tasks) > 0:
+        slurm_utils.cancel_jobs(unique_tasks)
     # Also cancel any reservations. If jobs have been reserved,
     # then their corresponding array has been started and will
     # be cancelled regardless.
