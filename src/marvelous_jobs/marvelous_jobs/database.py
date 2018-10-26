@@ -1,6 +1,7 @@
 from functools import reduce
 import os
 import sqlite3
+import subprocess
 import time
 
 from marvelous_jobs import slurm_utils
@@ -10,6 +11,7 @@ class marvel_db:
 
     def __init__(self, filename, name, coverage, force=False):
         is_new = not os.path.exists(filename)
+        self.filename = filename
         self._db = sqlite3.connect(filename, timeout=30.0)
         self._db.row_factory = sqlite3.Row
         self._c = self._db.cursor()
@@ -68,6 +70,19 @@ class marvel_db:
         c.execute('SELECT name, coverage FROM project')
         name, coverage = c.fetchone()
         return cls(filename, name, coverage, False)
+
+    def backup(self, filename):
+        p = subprocess.Popen([
+            'sqlite3', self.filename,
+            '.backup {0}'.format(filename)
+        ], shell=False, stderr=subprocess.PIPE)
+        output = p.communicate()
+        if len(output[1].strip()) > 0:
+            raise RuntimeError(output[1].strip().decode('utf-8'))
+
+    def integrity_check(self):
+        self._c.execute('PRAGMA integrity_check')
+        return self._c.fetchone()[0] == 'ok'
 
     def begin_exclusive(self):
         self._c.execute('BEGIN EXCLUSIVE')

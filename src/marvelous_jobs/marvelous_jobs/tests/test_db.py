@@ -1,7 +1,9 @@
 from nose.tools import assert_equals
 from nose.tools import assert_is_instance
 from nose.tools import assert_dict_equal
+from nose.tools import assert_true
 from nose.tools import with_setup
+import os
 import threading
 
 import marvelous_jobs as mj
@@ -35,6 +37,16 @@ def test_rowid():
     min_rowid, max_rowid = db._c.fetchone()
     assert_equals(min_rowid, 1)
     assert_equals(max_rowid, db.n_daligner_jobs())
+
+@with_setup(set_dummy_jobs, reset_dummy_jobs)
+def test_database_integrity():
+    assert_true(db.integrity_check())
+
+@with_setup(set_dummy_jobs, reset_dummy_jobs)
+def test_database_backup():
+    backup_filename = '{0}.backup'.format(config.get('general', 'database'))
+    db.backup(backup_filename)
+    assert_true(os.path.isfile(backup_filename))
 
 @with_setup(set_dummy_jobs, reset_dummy_jobs)
 def test_getting_daligner_jobs():

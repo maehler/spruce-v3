@@ -223,6 +223,13 @@ def submit_daligner_jobs(ntasks, config, masking_jobid=None):
 def update_daligner_queue():
     config = mc()
     db = get_database()
+    print('Checking database integrity...')
+    if not db.integrity_check():
+        print('error: database corrupted, manual cleanup required',
+              file=sys.stderr)
+        sys.exit(1)
+    print('Backing up database...')
+    db.backup('{0}.backup'.format(config.get('general', 'database')))
     update_statuses()
 
     jobs_not_started = db.n_daligner_jobs(slurm_utils.status.notstarted)
