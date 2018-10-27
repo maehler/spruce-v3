@@ -220,6 +220,17 @@ def submit_daligner_jobs(ntasks, config, masking_jobid=None):
     job_array = get_daligner_array(ntasks, config, masking_jobid)
     return job_array.start()
 
+def backup_database():
+    config = mc()
+    db = get_database()
+    print('Checking database integrity...')
+    if not db.integrity_check():
+        print('error: database corrupted, manual cleanup required',
+              file=sys.stderr)
+        sys.exit(1)
+    print('Backing up database...')
+    db.backup('{0}.backup'.format(config.get('general', 'database')))
+
 def update_daligner_queue():
     config = mc()
     db = get_database()
@@ -542,6 +553,10 @@ def parse_args():
     info_parser = subparsers.add_parser('info', help='Show project info',
         description='Show project information.')
 
+    # Backup
+    backup_parser = subparsers.add_parser('backup', help='Backup the database',
+        description='Make a backup of the marvelous_jobs database.')
+
     # DBprepare
     prep_parser = subparsers.add_parser('prepare', help='Prepare data files',
         description='Prepare sequence data for MARVEL by splitting it into '
@@ -691,6 +706,8 @@ def main():
     elif not is_project():
         print('error: no project found, have you run init?', file=sys.stderr)
         sys.exit(1)
+    if args.subcommand == 'backup':
+        backup_database()
     if args.subcommand == 'prepare':
         prepare(fasta=args.fasta,
                 blocksize=args.blocksize,
