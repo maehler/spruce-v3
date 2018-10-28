@@ -4,6 +4,7 @@ from nose.tools import assert_dict_equal
 from nose.tools import assert_true
 from nose.tools import with_setup
 import os
+import subprocess
 import threading
 
 import marvelous_jobs as mj
@@ -136,3 +137,31 @@ def test_reserving_jobs_in_parallel():
     db.cancel_daligner_reservation()
     reserved_jobs = db.get_daligner_jobs(status=mj.slurm_utils.status.reserved)
     assert_equals(len(reserved_jobs), 0)
+
+@with_setup(set_dummy_jobs, reset_dummy_jobs)
+def test_reserving_jobs_multiprocessing():
+    jobs_per_process = 100
+    n_processes = 100
+    processes = []
+    for i in range(n_processes):
+        p = subprocess.Popen(['marvelous_jobs', 'daligner', 'reserve', '-n',
+                              str(jobs_per_process)], shell=False,
+                             cwd=config.get('general', 'directory'),
+                             stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE)
+        processes.append(p)
+
+    outputs = []
+    for p in processes:
+        p.wait()
+        stderr_data = p.stderr.read()
+        assert_equals(len(stderr_data.strip()), 0)
+        output_lines = p.stdout.read().strip().splitlines()
+        assert_equals(len(output_lines), jobs_per_process)
+        for line in output_lines:
+            outputs.append(line.strip().split())
+
+    rowids = sorted([int(x[0]) for x in outputs])
+    assert_equals(rowids[0], 201)
+    assert_equals(len(rowids), jobs_per_process * n_processes)
+    assert_equals(len(set(rowids)), jobs_per_process * n_processes)

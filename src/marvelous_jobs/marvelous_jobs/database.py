@@ -12,7 +12,7 @@ class marvel_db:
     def __init__(self, filename, name, coverage, force=False):
         is_new = not os.path.exists(filename)
         self.filename = filename
-        self._db = sqlite3.connect(filename, timeout=30.0)
+        self._db = sqlite3.connect(filename, timeout=60.0)
         self._db.row_factory = sqlite3.Row
         self._c = self._db.cursor()
 
@@ -65,10 +65,11 @@ class marvel_db:
 
     @classmethod
     def from_file(cls, filename):
-        db = sqlite3.connect(filename)
+        db = sqlite3.connect(filename, timeout=60.0)
         c = db.cursor()
         c.execute('SELECT name, coverage FROM project')
         name, coverage = c.fetchone()
+        db.close()
         return cls(filename, name, coverage, False)
 
     def backup(self, filename):

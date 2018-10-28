@@ -17,7 +17,7 @@ log_dir = os.path.join(testdir, 'logs')
 os.mkdir(script_dir)
 os.mkdir(log_dir)
 
-db_filename = os.path.join(testdir, 'testdb')
+db_filename = os.path.join(testdir, 'marveldb')
 config_filename = os.path.join(testdir, 'config.ini')
 
 n_blocks = 500
@@ -60,14 +60,14 @@ def setup():
     jobs = []
 
     # Diagonal
-    for i in range(n_blocks):
+    for i in range(1, n_blocks + 1):
         current_job += 1
         db.add_block(i, 'test.{0}'.format(i))
         jobs.append((current_job, i, i, 1, False))
 
     # Off-diagonal
-    for i in range(n_blocks):
-        for j in range(i + 1, n_blocks):
+    for i in range(1, n_blocks + 1):
+        for j in range(i + 1, n_blocks + 1):
             current_job += 1
             jobs.append((current_job, i, j, 1, False))
             if current_job % 1000 == 0:
