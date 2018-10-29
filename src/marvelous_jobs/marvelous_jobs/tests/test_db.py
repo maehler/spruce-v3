@@ -1,9 +1,11 @@
+from nose.tools import assert_dict_equal
 from nose.tools import assert_equals
 from nose.tools import assert_is_instance
-from nose.tools import assert_dict_equal
+from nose.tools import assert_raises
 from nose.tools import assert_true
 from nose.tools import with_setup
 import os
+import sqlite3
 import subprocess
 import threading
 
@@ -141,7 +143,7 @@ def test_reserving_jobs_in_parallel():
 @with_setup(set_dummy_jobs, reset_dummy_jobs)
 def test_reserving_jobs_multiprocessing():
     jobs_per_process = 100
-    n_processes = 100
+    n_processes = 500
     processes = []
     for i in range(n_processes):
         p = subprocess.Popen(['marvelous_jobs', 'daligner', 'reserve', '-n',
@@ -155,6 +157,8 @@ def test_reserving_jobs_multiprocessing():
     for p in processes:
         p.wait()
         stderr_data = p.stderr.read()
+        if len(stderr_data.strip()) > 0:
+            print(stderr_data.strip().decode('utf-8'))
         assert_equals(len(stderr_data.strip()), 0)
         output_lines = p.stdout.read().strip().splitlines()
         assert_equals(len(output_lines), jobs_per_process)
@@ -165,3 +169,31 @@ def test_reserving_jobs_multiprocessing():
     assert_equals(rowids[0], 201)
     assert_equals(len(rowids), jobs_per_process * n_processes)
     assert_equals(len(set(rowids)), jobs_per_process * n_processes)
+
+@with_setup(set_dummy_jobs, reset_dummy_jobs)
+def test_exclusive():
+    db1 = sqlite3.connect(config.get('general', 'database'), timeout=0)
+    c1 = db1.cursor()
+    db2 = sqlite3.connect(config.get('general', 'database'), timeout=0)
+    c2 = db2.cursor()
+
+    select_query = '''SELECT rowid FROM daligner_job
+        WHERE status = "NOTSTARTED" LIMIT 10'''
+
+    c1.execute('BEGIN EXCLUSIVE');
+    with assert_raises(sqlite3.OperationalError) as oe:
+        c2.execute(select_query)
+    c1.execute(select_query)
+    rowids1 = [x[0] for x in c1.fetchall()]
+    with assert_raises(sqlite3.OperationalError) as oe:
+        c2.execute(select_query)
+    c1.execute('UPDATE daligner_job SET status = "RESERVED" WHERE rowid IN({0})' \
+              .format(','.join('?' for x in rowids1)), tuple(rowids1))
+    with assert_raises(sqlite3.OperationalError) as oe:
+        c2.execute(select_query)
+    db1.commit()
+    c2.execute(select_query)
+    rowids2 = [x[0] for x in c2.fetchall()]
+
+    assert_true(len(rowids1), len(rowids2))
+    assert_true(len(set(rowids1 + rowids2)), len(rowids1) + len(rowids2))

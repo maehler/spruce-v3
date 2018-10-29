@@ -3,6 +3,7 @@
 import argparse
 import os
 import queue
+import sqlite3
 from subprocess import Popen, PIPE
 import sys
 import time
@@ -282,7 +283,7 @@ def stop_daligner(status=(slurm_utils.status.running,
 
     unique_tasks = set()
     for ji in jobids.values():
-        unique_tasks.add(array_id)
+        unique_tasks.add(ji)
 
     print('Stopping daligner jobs...')
 
@@ -303,7 +304,11 @@ def reserve_daligner(n_jobs, cancel=False):
         db.cancel_daligner_reservation()
         return
 
-    jobs = db.reserve_daligner_jobs(n_jobs)
+    try:
+        jobs = db.reserve_daligner_jobs(n_jobs)
+    except sqlite3.OperationalError as oe:
+        print('error: {0}'.format(oe), file=sys.stderr)
+        exit(1)
 
     for j in jobs:
         print('{rowid}\t{block_id1}\t{block_id2}'.format(**j))
