@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+import hashlib
 import os
 import queue
 import sqlite3
@@ -106,6 +107,12 @@ def start_daligner(jobs_per_task=100, force=False, no_masking=False):
     db = get_database()
     update_statuses()
 
+    run_directory = os.path.join(config.get('general', 'directory'),
+                                 'daligner_runs')
+    config.set('daligner', 'run_directory', run_directory)
+    if run_directory is not None and not os.path.isdir(run_directory):
+        os.mkdir(run_directory)
+
     if jobs_per_task > config.getint('general', 'max_number_of_jobs'):
         print('error: number of jobs per task ({0}) cannot be more than the '
               'maximum number of jobs ({1})' \
@@ -188,9 +195,24 @@ def start_daligner(jobs_per_task=100, force=False, no_masking=False):
 
     print()
 
-def get_daligner_array(ntasks, config, masking_jobid=None):
+def get_daligner_array(ntasks, config, db, masking_jobid=None):
+    # Reserve jobs
+    reservation_token = hashlib.md5(str(time.time()).encode('utf-8')).hexdigest()
+    for i in range(1, ntasks + 1):
+        reservation = db.reserve_daligner_jobs(config.get('daligner', 'jobs_per_task'))
+        reservation_filename = os.path.join(
+            config.get('daligner', 'run_directory'),
+            'daligner_task_{0}_{1}.txt'.format(reservation_token, i))
+        with open(reservation_filename, 'w') as f:
+            for d in reservation:
+                f.write('\t'.join(map(str, [d['rowid'],
+                                            d['block_id1'],
+                                            d['block_id2']])) + '\n')
     job_array = daligner_job_array(ntasks,
                                    config.get('general', 'database'),
+                                   reservation_token = reservation_token,
+                                   run_directory = config.get('daligner',
+                                                              'run_directory'),
                                    script_directory=config.get('general',
                                                                'script_directory'),
                                    log_directory=config.get('general',
@@ -215,10 +237,10 @@ def get_daligner_array(ntasks, config, masking_jobid=None):
 
     return job_array
 
-def submit_daligner_jobs(ntasks, config, masking_jobid=None):
+def submit_daligner_jobs(ntasks, config, db, masking_jobid=None):
     if ntasks == 0:
         return
-    job_array = get_daligner_array(ntasks, config, masking_jobid)
+    job_array = get_daligner_array(ntasks, config, db, masking_jobid)
     return job_array.start()
 
 def backup_database():
@@ -268,7 +290,7 @@ def update_daligner_queue():
         return
 
     try:
-        jobid = submit_daligner_jobs(tasks_to_queue, config, db.get_masking_jobid())
+        jobid = submit_daligner_jobs(tasks_to_queue, config, db, db.get_masking_jobid())
     except RuntimeError as rte:
         print('error: job submission failed\n{0}'.format(rte), file=sys.stderr)
         sys.exit(1)

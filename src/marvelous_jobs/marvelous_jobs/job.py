@@ -130,6 +130,7 @@ class daligner_job_array(marvel_job):
     filename = 'daligner_array.sh'
 
     def __init__(self, n_tasks, database_filename, script_directory=None,
+                 run_directory=None, reservation_token=None,
                  log_directory=None, jobs_per_task=100, masking_jobid=None,
                  masking_port=None,account=None, timelimit='1-00:00:00',
                  verbose=True, identity=True, tuple_suppression_frequency=20,
@@ -138,6 +139,16 @@ class daligner_job_array(marvel_job):
         self.jobs_per_task = jobs_per_task
         self.array_indices = range(1, n_tasks + 1)
         self.use_masking_server = masking_jobid is not None
+
+        if reservation_token is None:
+            raise ValueError('reservation token must not be None')
+        self.reservation_token = reservation_token
+
+        if run_directory is None:
+            self.run_directory = os.path.abspath('.')
+        else:
+            self.run_directory = run_directory
+
         if script_directory is None:
             self.filename = daligner_job_array.filename
         else:
@@ -153,7 +164,10 @@ class daligner_job_array(marvel_job):
         sqlite_timeout = '-init <(echo .timeout 30000)'
         args = [
             # Setup
-            ['njobs=$1'],
+            ['reservation=$1'],
+            ['reservation_filename="{0}/daligner_task_${{reservation}}_${{SLURM_ARRAY_TASK_ID}}.txt"' \
+             .format(run_directory)],
+            ['echo', '"Using reservation in $reservation_filename"'],
             ['project=$(sqlite3 {0} {1} "SELECT name FROM project")' \
                 .format(sqlite_timeout, database_filename)],
             [],
@@ -167,8 +181,7 @@ class daligner_job_array(marvel_job):
             ['fi'],
             [],
             # daligner
-            ['marvelous_jobs', 'daligner', 'reserve', '-n', '"${njobs}"',
-             '|', 'while', 'read', '-ra', 'line;', 'do'],
+            ['while', 'IFS=$\'\\t\'', 'read', '-ra', 'line;', 'do'],
             ['\trowid=${line[0]}'],
             ['\tblock1=${line[1]}'],
             ['\tblock2=${line[2]}'],
@@ -196,7 +209,7 @@ class daligner_job_array(marvel_job):
              'SET status = \'{0}\', '.format(mj.slurm_utils.status.completed) + \
              'last_update = datetime(\'now\', \'localtime\') ' + \
              'WHERE rowid = ${rowid}"'],
-            ['done']
+            ['done', '<', '$reservation_filename']
         ]
 
         super().__init__(args, 'daligner_array',
@@ -222,7 +235,7 @@ class daligner_job_array(marvel_job):
         return ','.join(id_groups)
 
     def start(self, dryrun=False, force_write=False):
-        return super().start(dryrun, force_write, self.jobs_per_task)
+        return super().start(dryrun, force_write, self.reservation_token)
 
 class daligner_job(marvel_job):
 
