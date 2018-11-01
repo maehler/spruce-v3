@@ -42,6 +42,12 @@ def test_array_indices():
                                 config.get('general', 'script_directory'),
                                 reservation_token='test-token')
     assert_equals(job._array_index_str(), '1-201')
+    job = mj.daligner_job_array(201,
+                                config.get('general', 'database'),
+                                config.get('general', 'script_directory'),
+                                reservation_token='test-token',
+                                max_simultaneous_tasks=10)
+    assert_equals(job._array_index_str(), '1-201%10')
 
 def test_array_submit():
     job = mj.daligner_job_array(10,

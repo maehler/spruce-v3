@@ -102,7 +102,8 @@ def prepare(fasta, blocksize, script_directory, log_directory, force=False):
     jobid = job.start()
     db.update_prepare_job_id(jobid)
 
-def start_daligner(jobs_per_task=100, force=False, no_masking=False):
+def start_daligner(jobs_per_task=100, max_simultaneous_tasks=None,
+                   force=False, no_masking=False):
     config = mc()
     db = get_database()
     update_statuses()
@@ -138,6 +139,7 @@ def start_daligner(jobs_per_task=100, force=False, no_masking=False):
         exit(1)
 
     config.set('daligner', 'jobs_per_task', jobs_per_task)
+    config.set('daligner', 'max_simultaneous_tasks', max_simultaneous_tasks)
 
     projname = db.get_project_name()
 
@@ -219,6 +221,8 @@ def get_daligner_array(ntasks, config, db, masking_jobid=None):
                                                             'log_directory'),
                                    jobs_per_task=config.get('daligner',
                                                             'jobs_per_task'),
+                                   max_simultaneous_tasks=config.getint('daligner',
+                                                                        'max_simultaneous_tasks'),
                                    masking_jobid=masking_jobid,
                                    masking_port=config.getint('DMserver',
                                                               'port'),
@@ -645,6 +649,9 @@ def parse_args():
     dalign_start.add_argument('-n', '--jobs-per-task', help='number of jobs '
                               'that each task in a job array will run',
                               type=int, default=100)
+    dalign_start.add_argument('-m', '--max-simultaneous-tasks', help='maximum '
+                              'number of tasks allowed to run simultaneously',
+                              type=int)
     dalign_start.add_argument('-f', '--force', help='forcefully add daligner '
                               'jobs, removing any existing jobs',
                               action='store_true')
@@ -712,7 +719,11 @@ def parse_args():
     if args.subcommand == 'daligner' and args.subsubcommand == 'start':
         if not positive_integer(args.jobs_per_task):
             parser.error('jobs per task must be a positive non-zero integer')
+        elif args.jobs_per_task > 1000:
             parser.error('jobs per task cannot exceed 1000')
+        if not positive_integer(args.max_simultaneous_tasks):
+            parser.error('maximum number of simultaneous tasks must be a '
+                         'positive non-zero integer')
     if args.subcommand == 'daligner' and args.subsubcommand == 'reserve':
         if not positive_integer(args.n):
             parser.error('number of jobs must be a positive non-zero integer')
@@ -748,7 +759,9 @@ def main():
     if args.subcommand == 'mask' and args.subsubcommand == 'stop':
         stop_mask()
     if args.subcommand == 'daligner' and args.subsubcommand == 'start':
-        start_daligner(args.jobs_per_task, args.force, args.no_masking)
+        start_daligner(jobs_per_task=args.jobs_per_task, force=args.force,
+                       no_masking=args.no_masking,
+                       max_simultaneous_tasks=args.max_simultaneous_tasks)
     if args.subcommand == 'daligner' and args.subsubcommand == 'update':
         update_daligner_queue()
     if args.subcommand == 'daligner' and args.subsubcommand == 'stop':

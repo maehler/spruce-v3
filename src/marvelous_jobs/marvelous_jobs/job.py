@@ -131,7 +131,8 @@ class daligner_job_array(marvel_job):
 
     def __init__(self, n_tasks, database_filename, script_directory=None,
                  run_directory=None, reservation_token=None,
-                 log_directory=None, jobs_per_task=100, masking_jobid=None,
+                 log_directory=None, jobs_per_task=100,
+                 max_simultaneous_tasks=None, masking_jobid=None,
                  masking_port=None,account=None, timelimit='1-00:00:00',
                  verbose=True, identity=True, tuple_suppression_frequency=20,
                  correlation_rate=0.7, threads=4):
@@ -139,6 +140,7 @@ class daligner_job_array(marvel_job):
         self.jobs_per_task = jobs_per_task
         self.array_indices = range(1, n_tasks + 1)
         self.use_masking_server = masking_jobid is not None
+        self.max_simultaneous_tasks = max_simultaneous_tasks
 
         if reservation_token is None:
             raise ValueError('reservation token must not be None')
@@ -232,7 +234,10 @@ class daligner_job_array(marvel_job):
                 id_groups.append(str(gmin))
             else:
                 id_groups.append('{0}-{1}'.format(gmin, gmax))
-        return ','.join(id_groups)
+        array_str = ','.join(id_groups)
+        if self.max_simultaneous_tasks is not None:
+            array_str += '%{0}'.format(self.max_simultaneous_tasks)
+        return array_str
 
     def start(self, dryrun=False, force_write=False):
         return super().start(dryrun, force_write, self.reservation_token)
