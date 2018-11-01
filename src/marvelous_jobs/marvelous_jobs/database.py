@@ -1,5 +1,6 @@
 from functools import reduce
 import os
+import re
 import sqlite3
 import subprocess
 import time
@@ -139,43 +140,80 @@ class marvel_db:
         self._c.execute(query, tuple(rowids))
         return {x[0]: x[1] for x in self._c.fetchall()}
 
-    def update_daligner_jobs(self, rowids, jobid=None):
+    def get_daligner_tokens(self, rowids):
+        query = 'SELECT rowid, reservation_token from daligner_job WHERE rowid in ({0})' \
+                .format(','.join('?' for x in rowids))
+        self._c.execute(query, tuple(rowids))
+        return {x[0]: x[1] for x in self._c.fetchall()}
+
+    def update_daligner_jobs(self, rowids, log_directory):
         if type(rowids) is not list:
             rowids = [rowids]
 
         if len(rowids) == 0:
             return
 
-        if jobid is not None:
-            query = 'UPDATE daligner_job SET jobid = ?, status = ? WHERE rowid IN ({0})' \
-                    .format(','.join('?' for ri in rowids))
-            self._c.execute(query, tuple([jobid, slurm_utils.status.pending] + rowids))
-            self._db.commit()
+        tokens = self.get_daligner_tokens(rowids)
+        unique_tokens = set(x for x in tokens.values() if x is not None)
+
+        if len(unique_tokens) == 0:
             return
 
-        jobids = self.get_daligner_jobids(rowids)
+        token_regex = re.compile('|'.join(unique_tokens))
+        jobid_regex = re.compile(r'_(\d+_\d+)\.log$')
+        started_regex = re.compile(r'^Starting job (\d+)')
+        completed_regex = re.compile(r'^Finished job (\d+)')
 
         start = time.time()
-        statuses = {}
-        for ri, ji in jobids.items():
-            if ji is None:
-                statuses[ri] = slurm_utils.status.notstarted
-            else:
-                s = slurm_utils.get_job_status(ji)
-                if s is None:
-                    statuses[ri] = slurm_utils.status.notstarted
-                else:
-                    statuses[ri] = slurm_utils.get_job_status(ji)
+
+        statuses = {ri: {'started': False,
+                         'completed': False,
+                         'jobid': None} for ri in rowids}
+
+        for fname in os.listdir(log_directory):
+            full_fname = os.path.join(log_directory, fname)
+            if not os.path.isfile(full_fname):
+                continue
+            if not token_regex.search(full_fname):
+                continue
+            jobid_match = jobid_regex.search(full_fname)
+            if not jobid_match:
+                raise ValueError('no job id found in logfile')
+            jobid = jobid_match.group(1)
+            with open(full_fname) as f:
+                for line in f:
+                    start_match = started_regex.search(line)
+                    if start_match:
+                        rowid = int(start_match.group(1))
+                        if rowid not in rowids:
+                            continue
+                        statuses[rowid]['started'] = True
+                        statuses[rowid]['jobid'] = jobid
+
+                    end_match = completed_regex.search(line)
+                    if end_match:
+                        rowid = int(end_match.group(1))
+                        if rowid not in rowids:
+                            continue
+                        statuses[rowid]['completed'] = True
+                        statuses[rowid]['jobid'] = jobid
+
         print('fetched status in {0}'.format(time.time() - start))
 
         query = '''UPDATE daligner_job SET
             status = ?,
+            jobid = ?,
             last_update = datetime("now", "localtime")
         WHERE rowid = ?'''
 
         start = time.time()
         for ri, status in statuses.items():
-            self._c.execute(query, (status, ri))
+            textstatus = slurm_utils.status.reserved
+            if status['completed']:
+                textstatus = slurm_utils.status.completed
+            elif status['started']:
+                textstatus = slurm_utils.status.running
+            self._c.execute(query, (textstatus, status['jobid'], ri))
         self._db.commit()
         print('updated database in {0}'.format(time.time() - start))
 

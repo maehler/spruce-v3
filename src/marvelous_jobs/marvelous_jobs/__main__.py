@@ -526,6 +526,7 @@ def update_and_restart():
     update_statuses()
 
 def update_statuses():
+    config = mc()
     db = get_database()
 
     try:
@@ -540,16 +541,15 @@ def update_statuses():
     if not db.is_prepared() and prepare_status == slurm_utils.status.completed:
         db.prepare()
 
-    # Update status of jobs that have been submitted but not failed or
-    # completed, i.e. their job state is one of CONFIGURING, RUNNING,
-    # PENDING, or COMPLETING
+    # Update status of jobs that have a status of RESERVED or RUNNING.
+    # At the moment these are the only two statuses that a daligner job
+    # can have.
     start = time.time()
-    djs = db.get_daligner_jobs(status=(slurm_utils.status.pending,
-                                       slurm_utils.status.configuring,
-                                       slurm_utils.status.running,
-                                       slurm_utils.status.completing))
+    djs = db.get_daligner_jobs(status=(slurm_utils.status.running,
+                                       slurm_utils.status.reserved))
     print('fetched jobs in {0}'.format(time.time() - start))
-    db.update_daligner_jobs(djs)
+    db.update_daligner_jobs(djs, log_directory=config.get('general',
+                                                          'log_directory'))
 
 # Helper functions for the argument parsing
 def directory_exists(s):

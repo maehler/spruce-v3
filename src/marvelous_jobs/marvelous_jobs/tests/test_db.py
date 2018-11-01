@@ -14,11 +14,13 @@ from marvelous_jobs.tests import config, db, n_blocks, n_daligner_jobs
 
 def set_dummy_jobs():
     query1 = '''UPDATE daligner_job
-        SET jobid = "1_" || rowid, status = "COMPLETED"
+        SET jobid = "1_" || rowid, status = "COMPLETED",
+        reservation_token = "test_token"
         WHERE rowid <= 100'''
     db._c.execute(query1)
     query2 = '''UPDATE daligner_job
-        SET jobid = "2_" || ?, status = "RUNNING"
+        SET jobid = "2_" || ?, status = "RUNNING",
+        reservation_token = "test_token"
         WHERE rowid = ?'''
     for i, ri in zip(range(1, 101), range(101, 201)):
         db._c.execute(query2, (i, ri))
@@ -67,13 +69,13 @@ def test_getting_daligner_jobs():
 @with_setup(set_dummy_jobs, reset_dummy_jobs)
 def test_update_daligner_jobs():
     jobs = db.get_daligner_jobs(5, status=mj.slurm_utils.status.notstarted)
-    db.update_daligner_jobs(jobs)
+    db.update_daligner_jobs(jobs, config.get('general', 'log_directory'))
 
+    jobs = db.get_daligner_jobs(75, status=mj.slurm_utils.status.running)
+    assert_equals(len(jobs), 75)
+    db.update_daligner_jobs(jobs, config.get('general', 'log_directory'))
     jobs = db.get_daligner_jobs(status=mj.slurm_utils.status.running)
-    assert_equals(len(jobs), 100)
-    db.update_daligner_jobs(jobs)
-    jobs = db.get_daligner_jobs(status=mj.slurm_utils.status.running)
-    assert_equals(len(jobs), 0)
+    assert_equals(len(jobs), 25)
 
     jobs = db.get_daligner_jobs(status=mj.slurm_utils.status.completed)
     assert_equals(len(jobs), 100)
