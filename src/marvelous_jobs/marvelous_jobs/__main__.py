@@ -201,7 +201,8 @@ def get_daligner_array(ntasks, config, db, masking_jobid=None):
     # Reserve jobs
     reservation_token = hashlib.md5(str(time.time()).encode('utf-8')).hexdigest()
     for i in range(1, ntasks + 1):
-        reservation = db.reserve_daligner_jobs(config.get('daligner', 'jobs_per_task'))
+        reservation = db.reserve_daligner_jobs(token=reservation_token,
+                                               max_jobs=config.get('daligner', 'jobs_per_task'))
         reservation_filename = os.path.join(
             config.get('daligner', 'run_directory'),
             'daligner_task_{0}_{1}.txt'.format(reservation_token, i))
@@ -322,6 +323,9 @@ def stop_daligner(status=(slurm_utils.status.running,
 
     update_statuses()
 
+def get_reservation_token():
+    return hashlib.md5(str(time.time()).encode('utf-8')).hexdigest()
+
 def reserve_daligner(n_jobs, cancel=False):
     config = mc()
     db = get_database()
@@ -330,8 +334,11 @@ def reserve_daligner(n_jobs, cancel=False):
         db.cancel_daligner_reservation()
         return
 
+    reservation_token = get_reservation_token()
+
     try:
-        jobs = db.reserve_daligner_jobs(n_jobs)
+        jobs = db.reserve_daligner_jobs(token=reservation_token,
+                                        max_jobs=n_jobs)
     except sqlite3.OperationalError as oe:
         print('error: {0}'.format(oe), file=sys.stderr)
         exit(1)

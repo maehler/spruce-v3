@@ -157,11 +157,13 @@ class daligner_job_array(marvel_job):
             self.filename = os.path.join(script_directory,
                                          daligner_job_array.filename)
         if log_directory is None:
-            self.logfile = '{0}_%A_%a.log' \
-                    .format(os.path.splitext(daligner_job_array.filename)[0])
+            self.logfile = '{0}_{1}_%A_%a.log' \
+                    .format(os.path.splitext(daligner_job_array.filename)[0],
+                            self.reservation_token)
         else:
-            self.logfile = os.path.join(log_directory, '{0}_%A_%a.log' \
-                                        .format(os.path.splitext(daligner_job_array.filename)[0]))
+            self.logfile = os.path.join(log_directory, '{0}_{1}_%A_%a.log' \
+                                        .format(os.path.splitext(daligner_job_array.filename)[0],
+                                                self.reservation_token))
 
         sqlite_timeout = '-init <(echo .timeout 30000)'
         args = [

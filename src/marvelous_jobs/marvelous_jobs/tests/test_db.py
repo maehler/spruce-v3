@@ -91,7 +91,7 @@ def test_daligner_jobids():
 
 @with_setup(set_dummy_jobs, reset_dummy_jobs)
 def test_reserving_jobs():
-    jobs = db.reserve_daligner_jobs(5)
+    jobs = db.reserve_daligner_jobs(token="test-token", max_jobs=5)
     reserved_jobs = db.get_daligner_jobs(status=mj.slurm_utils.status.reserved)
     assert_equals(len(jobs), 5)
     assert_equals(len(reserved_jobs), 5)
@@ -110,7 +110,8 @@ def test_reserving_jobs_in_parallel():
             self.jobs = []
         def run(self):
             local_db = mj.marvel_db.from_file(self.config.get('general', 'database'))
-            self.jobs = local_db.reserve_daligner_jobs(self.n_jobs)
+            self.jobs = local_db.reserve_daligner_jobs(token='test-token',
+                                                       max_jobs=self.n_jobs)
 
     jobs_per_thread = 100
     n_threads = 10

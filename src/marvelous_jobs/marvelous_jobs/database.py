@@ -42,6 +42,7 @@ class marvel_db:
                                  use_masking INT NOT NULL DEFAULT 1,
                                  jobid TEXT,
                                  last_update TEXT,
+                                 reservation_token TEXT,
                                  PRIMARY KEY(block_id1, block_id2),
                                  FOREIGN KEY(block_id1) REFERENCES block(id),
                                  FOREIGN KEY(block_id2) REFERENCES block(id))''')
@@ -198,7 +199,7 @@ class marvel_db:
 
         return [j[0] for j in self._c.fetchall()]
 
-    def reserve_daligner_jobs(self, max_jobs=None):
+    def reserve_daligner_jobs(self, token, max_jobs=None):
         self.begin_exclusive()
         rowids = self.get_daligner_jobs(max_jobs=max_jobs,
                                         status=slurm_utils.status.notstarted)
@@ -209,8 +210,10 @@ class marvel_db:
         jobs = self._c.fetchall()
         query = '''UPDATE daligner_job
             SET status = "{0}",
+            reservation_token = "{1}",
             last_update = datetime('now', 'localtime')
-            WHERE rowid IN ({1})'''.format(slurm_utils.status.reserved,
+            WHERE rowid IN ({2})'''.format(slurm_utils.status.reserved,
+                                           token,
                                            ','.join('?' for ri in rowids))
         self._c.execute(query, tuple(rowids))
         self.stop_exclusive()
