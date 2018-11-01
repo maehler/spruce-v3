@@ -188,13 +188,6 @@ class daligner_job_array(marvel_job):
             ['\tblock1=${line[1]}'],
             ['\tblock2=${line[2]}'],
             ['\techo "Starting job ${rowid}: ${project}.${block1} vs ${project}.${block2}"'],
-            # Set the job ID for the started jobs
-            ['\tsqlite3 {0} {1} "UPDATE daligner_job '.format(sqlite_timeout, database_filename) + \
-             'SET status = \'{0}\', '.format(mj.slurm_utils.status.running) + \
-             'jobid = \'${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}\', ' + \
-             'last_update = datetime(\'now\', \'localtime\') ' + \
-             'WHERE ' + \
-             'rowid = ${rowid}"'],
             ['\t{0}'.format(os.path.join(marvel.config.PATH_BIN, 'daligner')),
              '-v' if verbose else '',
              '-I' if identity else '',
@@ -205,12 +198,8 @@ class daligner_job_array(marvel_job):
                 if self.use_masking_server else '',
              '-j', threads,
              '"${project}.${block1}"', '"${project}.${block2}"'],
-            # Set the current job as completed
-            ['\tsqlite3 {0} {1} "UPDATE daligner_job '.format(sqlite_timeout,
-                                                              database_filename) + \
-             'SET status = \'{0}\', '.format(mj.slurm_utils.status.completed) + \
-             'last_update = datetime(\'now\', \'localtime\') ' + \
-             'WHERE rowid = ${rowid}"'],
+            ['echo "Finished job ${rowid}: ${project}.${block1} vs '
+             '${project}.${block2}"'],
             ['done', '<', '$reservation_filename']
         ]
 
