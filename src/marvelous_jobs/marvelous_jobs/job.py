@@ -190,7 +190,7 @@ class daligner_job_array(marvel_job):
             ['\tblock1=${line[1]}'],
             ['\tblock2=${line[2]}'],
             ['\techo "Starting job ${rowid}: ${project}.${block1} vs ${project}.${block2}"'],
-            ['\t{0}'.format(os.path.join(marvel.config.PATH_BIN, 'daligner')),
+            ['\tif {0}'.format(os.path.join(marvel.config.PATH_BIN, 'daligner')),
              '-v' if verbose else '',
              '-I' if identity else '',
              '-t', tuple_suppression_frequency,
@@ -199,9 +199,13 @@ class daligner_job_array(marvel_job):
              '${{maskip}}:{0}'.format(masking_port) \
                 if self.use_masking_server else '',
              '-j', threads,
-             '"${project}.${block1}"', '"${project}.${block2}"'],
-            ['echo "Finished job ${rowid}: ${project}.${block1} vs '
+             '"${project}.${block1}"', '"${project}.${block2}"; then'],
+            ['\t\techo "Finished job ${rowid}: ${project}.${block1} vs '
              '${project}.${block2}"'],
+            ['\telse'],
+            ['\t\techo "Failed job ${rowid}: ${project}.${block1} vs '
+             '${project}.${block2}"'],
+            ['\tfi'],
             ['done', '<', '$reservation_filename']
         ]
 

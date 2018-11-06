@@ -163,11 +163,13 @@ class marvel_db:
         jobid_regex = re.compile(r'_(\d+_\d+)\.log$')
         started_regex = re.compile(r'^Starting job (\d+)')
         completed_regex = re.compile(r'^Finished job (\d+)')
+        failed_regex = re.compile(r'^Failed job (\d+)')
 
         start = time.time()
 
         statuses = {ri: {'started': False,
                          'completed': False,
+                         'failed': False,
                          'jobid': None} for ri in rowids}
 
         for fname in os.listdir(log_directory):
@@ -198,6 +200,14 @@ class marvel_db:
                         statuses[rowid]['completed'] = True
                         statuses[rowid]['jobid'] = jobid
 
+                    fail_match = failed_regex.search(line)
+                    if fail_match:
+                        rowid = int(fail_match.group(1))
+                        if rowid not in rowids:
+                            continue
+                        statuses[rowid]['failed'] = True
+                        statuses[rowid]['jobid'] = jobid
+
         print('fetched status in {0}'.format(time.time() - start))
 
         query = '''UPDATE daligner_job SET
@@ -213,6 +223,8 @@ class marvel_db:
                 textstatus = slurm_utils.status.completed
             elif status['started']:
                 textstatus = slurm_utils.status.running
+            elif status['failed']:
+                textstatus = slurm_utils.status.failed
             self._c.execute(query, (textstatus, status['jobid'], ri))
         self._db.commit()
         print('updated database in {0}'.format(time.time() - start))
