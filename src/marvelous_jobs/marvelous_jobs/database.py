@@ -245,6 +245,8 @@ class marvel_db:
         for ji in range(max_jobs):
             rowids = self.get_daligner_jobs(max_jobs=comparisons_per_job,
                                             status=slurm_utils.status.notstarted)
+            if len(rowids) == 0:
+                break
             source_query = 'SELECT block_id1 FROM daligner_job WHERE rowid = ?'
             self._c.execute(source_query, (rowids[0],))
             source_block = self._c.fetchone()[0]

@@ -103,7 +103,7 @@ def prepare(fasta, blocksize, script_directory, log_directory, force=False):
     db.update_prepare_job_id(jobid)
 
 def start_daligner(jobs_per_task=100, max_simultaneous_tasks=None,
-                   force=False, no_masking=False):
+                   force=False, no_masking=False, comparisons_per_job=1):
     config = mc()
     db = get_database()
     update_statuses()
@@ -140,6 +140,7 @@ def start_daligner(jobs_per_task=100, max_simultaneous_tasks=None,
 
     config.set('daligner', 'jobs_per_task', jobs_per_task)
     config.set('daligner', 'max_simultaneous_tasks', max_simultaneous_tasks)
+    config.set('daligner', 'comparisons_per_job', comparisons_per_job)
 
     projname = db.get_project_name()
 
@@ -200,17 +201,22 @@ def start_daligner(jobs_per_task=100, max_simultaneous_tasks=None,
 def get_daligner_array(ntasks, config, db, masking_jobid=None):
     # Reserve jobs
     reservation_token = hashlib.md5(str(time.time()).encode('utf-8')).hexdigest()
+    n_jobs = 0
     for i in range(1, ntasks + 1):
         reservation = db.reserve_daligner_jobs(token=reservation_token,
-                                               max_jobs=config.get('daligner', 'jobs_per_task'))
+                                               max_jobs=config.getint('daligner',
+                                                                      'jobs_per_task'),
+                                               comparisons_per_job=config.getint('daligner',
+                                                                                 'comparisons_per_job'))
         reservation_filename = os.path.join(
             config.get('daligner', 'run_directory'),
             'daligner_task_{0}_{1}.txt'.format(reservation_token, i))
         with open(reservation_filename, 'w') as f:
             for d in reservation:
-                f.write('\t'.join(map(str, [d['rowid'],
-                                            d['block_id1'],
-                                            d['block_id2']])) + '\n')
+                n_jobs += len(d['rowids'])
+                f.write('\t'.join(map(str, [d['source_block']] + \
+                                            d['rowids'] + \
+                                            d['target_blocks'])) + '\n')
     job_array = daligner_job_array(ntasks,
                                    config.get('general', 'database'),
                                    reservation_token = reservation_token,
@@ -240,13 +246,13 @@ def get_daligner_array(ntasks, config, db, masking_jobid=None):
                                                                     'correlation_rate'),
                                    threads=config.getint('daligner', 'threads'))
 
-    return job_array
+    return job_array, n_jobs
 
 def submit_daligner_jobs(ntasks, config, db, masking_jobid=None):
     if ntasks == 0:
         return
-    job_array = get_daligner_array(ntasks, config, db, masking_jobid)
-    return job_array.start()
+    job_array, n_jobs = get_daligner_array(ntasks, config, db, masking_jobid)
+    return job_array.start(), n_jobs
 
 def backup_database():
     config = mc()
@@ -276,7 +282,8 @@ def update_daligner_queue():
         print('error: no jobs left to queue', file=sys.stderr)
         sys.exit(1)
 
-    jobs_per_task = config.getint('daligner', 'jobs_per_task')
+    jobs_per_task = config.getint('daligner', 'jobs_per_task') * \
+        config.getint('daligner', 'comparisons_per_job')
     max_tasks = min(jobs_not_started // jobs_per_task,
                    config.getint('general', 'max_number_of_jobs'))
     queued_tasks = db.get_n_running_tasks()
@@ -286,19 +293,22 @@ def update_daligner_queue():
 
     if max_tasks == 0:
         tasks_to_queue = 1
-        print('Queuing {0} jobs...'.format(jobs_not_started))
     else:
         tasks_to_queue = max_tasks - queued_tasks
-        print('Queuing {0} jobs...'.format(tasks_to_queue * jobs_per_task))
 
     if tasks_to_queue == 0:
+        print('Queueing no jobs...')
         return
 
+    print('Queueing jobs...')
+
     try:
-        jobid = submit_daligner_jobs(tasks_to_queue, config, db, db.get_masking_jobid())
+        jobid, n_jobs = submit_daligner_jobs(tasks_to_queue, config, db, db.get_masking_jobid())
     except RuntimeError as rte:
         print('error: job submission failed\n{0}'.format(rte), file=sys.stderr)
         sys.exit(1)
+
+    print('Queued {0} jobs'.format(n_jobs))
 
 def stop_daligner(status=(slurm_utils.status.running,
                           slurm_utils.status.pending)):
@@ -659,6 +669,10 @@ def parse_args():
     dalign_start.add_argument('-m', '--max-simultaneous-tasks', help='maximum '
                               'number of tasks allowed to run simultaneously',
                               type=int)
+    dalign_start.add_argument('-c', '--comparisons-per-job', help='the number '
+                              'of block comparisons that should be run for '
+                              'each daligner job (default: 1)', type=int,
+                              default=1)
     dalign_start.add_argument('-f', '--force', help='forcefully add daligner '
                               'jobs, removing any existing jobs',
                               action='store_true')
@@ -728,8 +742,12 @@ def parse_args():
             parser.error('jobs per task must be a positive non-zero integer')
         elif args.jobs_per_task > 1000:
             parser.error('jobs per task cannot exceed 1000')
-        if not positive_integer(args.max_simultaneous_tasks):
+        if args.max_simultaneous_tasks is not None \
+           and not positive_integer(args.max_simultaneous_tasks):
             parser.error('maximum number of simultaneous tasks must be a '
+                         'positive non-zero integer')
+        if not positive_integer(args.comparisons_per_job):
+            parser.error('comparisons per job must be a '
                          'positive non-zero integer')
     if args.subcommand == 'daligner' and args.subsubcommand == 'reserve':
         if not positive_integer(args.n):
@@ -768,7 +786,8 @@ def main():
     if args.subcommand == 'daligner' and args.subsubcommand == 'start':
         start_daligner(jobs_per_task=args.jobs_per_task, force=args.force,
                        no_masking=args.no_masking,
-                       max_simultaneous_tasks=args.max_simultaneous_tasks)
+                       max_simultaneous_tasks=args.max_simultaneous_tasks,
+                       comparisons_per_job=args.comparisons_per_job)
     if args.subcommand == 'daligner' and args.subsubcommand == 'update':
         update_daligner_queue()
     if args.subcommand == 'daligner' and args.subsubcommand == 'stop':
