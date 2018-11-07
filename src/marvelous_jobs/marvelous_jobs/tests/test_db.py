@@ -1,8 +1,10 @@
+from functools import reduce
 from nose.tools import assert_dict_equal
 from nose.tools import assert_equals
 from nose.tools import assert_is_instance
 from nose.tools import assert_raises
 from nose.tools import assert_true
+from nose.tools import raises
 from nose.tools import with_setup
 import os
 import sqlite3
@@ -28,7 +30,9 @@ def set_dummy_jobs():
 
 def reset_dummy_jobs():
     query = '''UPDATE daligner_job
-        SET jobid = NULL, status = "NOTSTARTED"'''
+        SET jobid = NULL,
+        status = "NOTSTARTED",
+        reservation_token = null'''
     db._c.execute(query)
     db._db.commit()
 
@@ -93,7 +97,7 @@ def test_daligner_jobids():
 
 @with_setup(set_dummy_jobs, reset_dummy_jobs)
 def test_reserving_jobs():
-    jobs = db.reserve_daligner_jobs(token="test-token", max_jobs=5)
+    jobs = db.reserve_daligner_jobs(token='test-token', max_jobs=5)
     reserved_jobs = db.get_daligner_jobs(status=mj.slurm_utils.status.reserved)
     assert_equals(len(jobs), 5)
     assert_equals(len(reserved_jobs), 5)
@@ -101,6 +105,36 @@ def test_reserving_jobs():
     db.cancel_daligner_reservation()
     reserved_jobs = db.get_daligner_jobs(status=mj.slurm_utils.status.reserved)
     assert_equals(len(reserved_jobs), 0)
+
+@with_setup(None, reset_dummy_jobs)
+def test_reserving_multiblocks():
+    # These jobs will be the diagonal, and they should only contain
+    # a single comparison.
+    jobs = db.reserve_daligner_jobs(token='test-token', max_jobs=n_blocks,
+                                    comparisons_per_job=16)
+    assert_equals(len(jobs), n_blocks)
+    for j in jobs:
+        assert_equals(len(j['target_blocks']), 1)
+
+    all_rowids = reduce(lambda x, y: x + y,
+                        [x['rowids'] for x in jobs])
+    assert_true(all(len(x['rowids']) == 1 for x in jobs))
+    assert_equals(len(set(all_rowids)), n_blocks)
+
+    # Off-diagonal jobs should be done column by column.
+    jobs = db.reserve_daligner_jobs(token='test-token2', max_jobs=100,
+                                    comparisons_per_job=16)
+    # The first few jobs should have the full number of comparisons...
+    assert_equals(len(jobs), 100)
+    n_full_jobs = (n_blocks-1)//16
+    for j in jobs[:n_full_jobs]:
+        assert_equals(len(j['target_blocks']), 16)
+    # .. while the remaining job should only contain comparisons up until
+    # the end of the column.
+    assert_equals(len(jobs[n_full_jobs]['target_blocks']),
+                  (n_blocks - 1) - 16 * n_full_jobs)
+    # And then it should again be full jobs.
+    assert_equals(len(jobs[n_full_jobs+1]['target_blocks']), 16)
 
 @with_setup(set_dummy_jobs, reset_dummy_jobs)
 def test_reserving_jobs_in_parallel():
@@ -135,43 +169,14 @@ def test_reserving_jobs_in_parallel():
     reserved_jobs = db.get_daligner_jobs(status=mj.slurm_utils.status.reserved)
     assert_equals(len(reserved_jobs), n_threads * jobs_per_thread)
 
-    all_rowids = [x['rowid'] for y in results for x in y]
+    all_rowids = reduce(lambda x, y: x + y,
+                        [x['rowids'] for y in results for x in y])
     assert_equals(len(all_rowids), n_threads * jobs_per_thread)
     assert_equals(len(set(all_rowids)), len(all_rowids))
 
     db.cancel_daligner_reservation()
     reserved_jobs = db.get_daligner_jobs(status=mj.slurm_utils.status.reserved)
     assert_equals(len(reserved_jobs), 0)
-
-@with_setup(set_dummy_jobs, reset_dummy_jobs)
-def test_reserving_jobs_multiprocessing():
-    jobs_per_process = 100
-    n_processes = 500
-    processes = []
-    for i in range(n_processes):
-        p = subprocess.Popen(['marvelous_jobs', 'daligner', 'reserve', '-n',
-                              str(jobs_per_process)], shell=False,
-                             cwd=config.get('general', 'directory'),
-                             stdout=subprocess.PIPE,
-                             stderr=subprocess.PIPE)
-        processes.append(p)
-
-    outputs = []
-    for p in processes:
-        p.wait()
-        stderr_data = p.stderr.read()
-        if len(stderr_data.strip()) > 0:
-            print(stderr_data.strip().decode('utf-8'))
-        assert_equals(len(stderr_data.strip()), 0)
-        output_lines = p.stdout.read().strip().splitlines()
-        assert_equals(len(output_lines), jobs_per_process)
-        for line in output_lines:
-            outputs.append(line.strip().split())
-
-    rowids = sorted([int(x[0]) for x in outputs])
-    assert_equals(rowids[0], 201)
-    assert_equals(len(rowids), jobs_per_process * n_processes)
-    assert_equals(len(set(rowids)), jobs_per_process * n_processes)
 
 @with_setup(set_dummy_jobs, reset_dummy_jobs)
 def test_exclusive():

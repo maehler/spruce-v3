@@ -157,11 +157,11 @@ class daligner_job_array(marvel_job):
             self.filename = os.path.join(script_directory,
                                          daligner_job_array.filename)
         if log_directory is None:
-            self.logfile = '{0}_{1}_%A_%a.log' \
+            self.logfile = '{0}_{1}_%a_%A_%a.log' \
                     .format(os.path.splitext(daligner_job_array.filename)[0],
                             self.reservation_token)
         else:
-            self.logfile = os.path.join(log_directory, '{0}_{1}_%A_%a.log' \
+            self.logfile = os.path.join(log_directory, '{0}_{1}_%a_%A_%a.log' \
                                         .format(os.path.splitext(daligner_job_array.filename)[0],
                                                 self.reservation_token))
 
@@ -186,10 +186,13 @@ class daligner_job_array(marvel_job):
             [],
             # daligner
             ['while', 'IFS=$\'\\t\'', 'read', '-ra', 'line;', 'do'],
-            ['\trowid=${line[0]}'],
-            ['\tblock1=${line[1]}'],
-            ['\tblock2=${line[2]}'],
-            ['\techo "Starting job ${rowid}: ${project}.${block1} vs ${project}.${block2}"'],
+            ['\tsource_block=${line[0]}'],
+            ['\tn=$(expr ${#line[@]} - 1)'],
+            ['\tn_comparisons=$(expr $n \/ 2)'],
+            ['\trowids=(${line[@]:1:$n_comparisons})'],
+            ['\tblocks=(${line[@]:$(expr $n_comparisons + 1)})'],
+            ['\techo "Starting job(s) ${rowids[@]}: '
+             '${source_block} vs ${blocks[@]}"'],
             ['\tif {0}'.format(os.path.join(marvel.config.PATH_BIN, 'daligner')),
              '-v' if verbose else '',
              '-I' if identity else '',
@@ -199,12 +202,12 @@ class daligner_job_array(marvel_job):
              '${{maskip}}:{0}'.format(masking_port) \
                 if self.use_masking_server else '',
              '-j', threads,
-             '"${project}.${block1}"', '"${project}.${block2}"; then'],
-            ['\t\techo "Finished job ${rowid}: ${project}.${block1} vs '
-             '${project}.${block2}"'],
+             '"${project}.${source_block}"', '"${blocks[@]/#/${project}.}"; then'],
+            ['\t\techo "Finished job(s) ${rowids[@]}: '
+             '${source_block} vs ${blocks[@]}"'],
             ['\telse'],
-            ['\t\techo "Failed job ${rowid}: ${project}.${block1} vs '
-             '${project}.${block2}"'],
+            ['\t\techo "Failed job(s) ${rowids[@]}: '
+             '${source_block} vs ${blocks[@]}"'],
             ['\tfi'],
             ['done', '<', '$reservation_filename']
         ]

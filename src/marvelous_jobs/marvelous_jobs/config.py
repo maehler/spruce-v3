@@ -31,6 +31,8 @@ class marvelous_config:
         return self.config.getboolean(section, key, fallback=default)
 
     def getint(self, section, key, default=None):
+        if self.get(section, key, default) is None:
+            return None
         return self.config.getint(section, key, fallback=default)
 
     def getfloat(self, section, key, default=None):

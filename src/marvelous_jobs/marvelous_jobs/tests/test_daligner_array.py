@@ -62,7 +62,7 @@ def test_array_submit():
     assert_true('-o {0}' \
                 .format(os.path.join(config.get('general',
                                                 'log_directory'),
-                                     'daligner_array_test-token_%A_%a.log')) \
+                                     'daligner_array_test-token_%a_%A_%a.log')) \
                 in cmd)
 
     job = mj.daligner_job_array(201,
@@ -70,7 +70,7 @@ def test_array_submit():
                                 config.get('general', 'script_directory'),
                                 reservation_token='test-token')
     cmd = job.start(dryrun=True)
-    assert_true('-o daligner_array_test-token_%A_%a.log' in cmd)
+    assert_true('-o daligner_array_test-token_%a_%A_%a.log' in cmd)
     os.remove(job.filename)
 
 def test_file_creation():

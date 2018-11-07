@@ -168,9 +168,9 @@ class marvel_db:
 
         token_regex = re.compile('|'.join(unique_tokens))
         jobid_regex = re.compile(r'_(\d+_\d+)\.log$')
-        started_regex = re.compile(r'^Starting job (\d+)')
-        completed_regex = re.compile(r'^Finished job (\d+)')
-        failed_regex = re.compile(r'^Failed job (\d+)')
+        started_regex = re.compile(r'^Starting job\(s\) ((\d+ ?)+)')
+        completed_regex = re.compile(r'^Finished job\(s\) ((\d+ ?)+)')
+        failed_regex = re.compile(r'^Failed job\(s\) ((\d+ ?)+)')
 
         start = time.time()
 
@@ -193,19 +193,30 @@ class marvel_db:
                 for line in f:
                     start_match = started_regex.search(line)
                     if start_match:
-                        rowid = int(start_match.group(1))
-                        if rowid not in rowids:
-                            continue
-                        statuses[rowid]['started'] = True
-                        statuses[rowid]['jobid'] = jobid
+                        rowid = map(int, start_match.group(1).split())
+                        for ri in rowid:
+                            if ri not in rowids:
+                                continue
+                            statuses[ri]['started'] = True
+                            statuses[ri]['jobid'] = jobid
 
                     end_match = completed_regex.search(line)
                     if end_match:
-                        rowid = int(end_match.group(1))
-                        if rowid not in rowids:
-                            continue
-                        statuses[rowid]['completed'] = True
-                        statuses[rowid]['jobid'] = jobid
+                        rowid = map(int, end_match.group(1).split())
+                        for ri in rowid:
+                            if ri not in rowids:
+                                continue
+                            statuses[ri]['completed'] = True
+                            statuses[ri]['jobid'] = jobid
+
+                    fail_match = failed_regex.search(line)
+                    if fail_match:
+                        rowid = map(int, fail_match.group(1).split())
+                        for ri in rowid:
+                            if ri not in rowids:
+                                continue
+                            statuses[ri]['failed'] = True
+                            statuses[ri]['jobid'] = jobid
 
                     fail_match = failed_regex.search(line)
                     if fail_match:
@@ -256,30 +267,47 @@ class marvel_db:
 
         return [j[0] for j in self._c.fetchall()]
 
-    def reserve_daligner_jobs(self, token, max_jobs=None):
+    def reserve_daligner_jobs(self, token, max_jobs=1, comparisons_per_job=1):
         self.begin_exclusive()
-        rowids = self.get_daligner_jobs(max_jobs=max_jobs,
-                                        status=slurm_utils.status.notstarted)
-        query = '''SELECT rowid, block_id1, block_id2
-            FROM daligner_job
-            WHERE rowid IN ({0})'''.format(','.join('?' for ri in rowids))
-        self._c.execute(query, tuple(rowids))
-        jobs = self._c.fetchall()
-        query = '''UPDATE daligner_job
-            SET status = "{0}",
-            reservation_token = "{1}",
-            last_update = datetime('now', 'localtime')
-            WHERE rowid IN ({2})'''.format(slurm_utils.status.reserved,
-                                           token,
-                                           ','.join('?' for ri in rowids))
-        self._c.execute(query, tuple(rowids))
+
+        reservation = []
+
+        for ji in range(max_jobs):
+            rowids = self.get_daligner_jobs(max_jobs=comparisons_per_job,
+                                            status=slurm_utils.status.notstarted)
+            if len(rowids) == 0:
+                break
+            source_query = 'SELECT block_id1 FROM daligner_job WHERE rowid = ?'
+            self._c.execute(source_query, (rowids[0],))
+            source_block = self._c.fetchone()[0]
+
+            query = '''SELECT rowid, block_id1, block_id2
+                FROM daligner_job
+                WHERE block_id1 = ? AND rowid IN ({0})''' \
+                        .format(','.join('?' for ri in rowids))
+            self._c.execute(query, (source_block,) + tuple(rowids))
+            jobs = self._c.fetchall()
+
+            assert(len(set(x[1] for x in jobs)) == 1)
+
+            reservation.append({
+                'source_block': source_block,
+                'target_blocks': [x[2] for x in jobs],
+                'rowids': [x[0] for x in jobs]
+            })
+
+            reserve_query = '''UPDATE daligner_job
+                SET status = "{0}",
+                reservation_token = "{1}",
+                last_update = datetime('now', 'localtime')
+                WHERE rowid IN ({2})''' \
+                        .format(slurm_utils.status.reserved, token,
+                                ','.join('?' for ri in range(len(jobs))))
+            self._c.execute(reserve_query, reservation[-1]['rowids'])
+
         self.stop_exclusive()
 
-        return [{
-            'rowid': row[0],
-            'block_id1': row[1],
-            'block_id2': row[2]
-        } for row in jobs]
+        return reservation
 
     def reset_daligner_jobs(self, rowids):
         query = 'UPDATE daligner_job SET status = ? WHERE rowid IN ({0})' \
