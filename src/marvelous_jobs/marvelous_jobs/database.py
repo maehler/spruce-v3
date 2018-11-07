@@ -289,7 +289,7 @@ class marvel_db:
         self._db.commit()
 
     def get_n_running_tasks(self):
-        query = '''SELECT COUNT(DISTINCT jobid)
+        query = '''SELECT COUNT(DISTINCT reservation_token)
         FROM daligner_job WHERE status IN (?, ?, ?, ?, ?)'''
         self._c.execute(query, (slurm_utils.status.running,
                                 slurm_utils.status.reserved,

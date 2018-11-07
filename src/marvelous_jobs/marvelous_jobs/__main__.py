@@ -201,7 +201,7 @@ def get_daligner_array(ntasks, config, db, masking_jobid=None):
     # Reserve jobs
     reservation_token = hashlib.md5(str(time.time()).encode('utf-8')).hexdigest()
     for i in range(1, ntasks + 1):
-        reservation = db.reserve_daligner_jobs(token=reservation_token,
+        reservation = db.reserve_daligner_jobs(token='{0}_{1}'.format(reservation_token, i),
                                                max_jobs=config.get('daligner', 'jobs_per_task'))
         reservation_filename = os.path.join(
             config.get('daligner', 'run_directory'),
