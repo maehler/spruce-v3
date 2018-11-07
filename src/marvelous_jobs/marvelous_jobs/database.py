@@ -143,8 +143,15 @@ class marvel_db:
     def get_daligner_tokens(self, rowids):
         query = 'SELECT rowid, reservation_token from daligner_job WHERE rowid in ({0})' \
                 .format(','.join('?' for x in rowids))
-        self._c.execute(query, tuple(rowids))
-        return {x[0]: x[1] for x in self._c.fetchall()}
+        tokens = {}
+        for i in range(0, len(rowids), 100):
+            rowid_batch = rowids[i:(i+100)]
+            query = 'SELECT rowid, reservation_token from daligner_job WHERE rowid in ({0})' \
+                    .format(','.join('?' for x in rowid_batch))
+            self._c.execute(query, tuple(rowid_batch))
+            for ri, token in self._c.fetchall():
+                tokens[ri] = token
+        return tokens
 
     def update_daligner_jobs(self, rowids, log_directory):
         if type(rowids) is not list:
