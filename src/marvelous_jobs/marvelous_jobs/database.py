@@ -159,15 +159,18 @@ class marvel_db:
         if len(unique_tokens) == 0:
             return
 
+
         token_regex = re.compile('|'.join(unique_tokens))
         jobid_regex = re.compile(r'_(\d+_\d+)\.log$')
-        started_regex = re.compile(r'^Starting job (\d+)')
-        completed_regex = re.compile(r'^Finished job (\d+)')
+        started_regex = re.compile(r'^Starting job\(s\) ((\d+ ?)+)')
+        completed_regex = re.compile(r'^Finished job\(s\) ((\d+ ?)+)')
+        failed_regex = re.compile(r'^Failed job\(s\) ((\d+ ?)+)')
 
         start = time.time()
 
         statuses = {ri: {'started': False,
                          'completed': False,
+                         'failed': False,
                          'jobid': None} for ri in rowids}
 
         for fname in os.listdir(log_directory):
@@ -184,19 +187,30 @@ class marvel_db:
                 for line in f:
                     start_match = started_regex.search(line)
                     if start_match:
-                        rowid = int(start_match.group(1))
-                        if rowid not in rowids:
-                            continue
-                        statuses[rowid]['started'] = True
-                        statuses[rowid]['jobid'] = jobid
+                        rowid = map(int, start_match.group(1).split())
+                        for ri in rowid:
+                            if ri not in rowids:
+                                continue
+                            statuses[ri]['started'] = True
+                            statuses[ri]['jobid'] = jobid
 
                     end_match = completed_regex.search(line)
                     if end_match:
-                        rowid = int(end_match.group(1))
-                        if rowid not in rowids:
-                            continue
-                        statuses[rowid]['completed'] = True
-                        statuses[rowid]['jobid'] = jobid
+                        rowid = map(int, end_match.group(1).split())
+                        for ri in rowid:
+                            if ri not in rowids:
+                                continue
+                            statuses[ri]['completed'] = True
+                            statuses[ri]['jobid'] = jobid
+
+                    fail_match = failed_regex.search(line)
+                    if fail_match:
+                        rowid = map(int, fail_match.group(1).split())
+                        for ri in rowid:
+                            if ri not in rowids:
+                                continue
+                            statuses[ri]['failed'] = True
+                            statuses[ri]['jobid'] = jobid
 
         print('fetched status in {0}'.format(time.time() - start))
 
@@ -213,6 +227,8 @@ class marvel_db:
                 textstatus = slurm_utils.status.completed
             elif status['started']:
                 textstatus = slurm_utils.status.running
+            elif status['failed']:
+                textstatus = slurm_utils.status.failed
             self._c.execute(query, (textstatus, status['jobid'], ri))
         self._db.commit()
         print('updated database in {0}'.format(time.time() - start))
