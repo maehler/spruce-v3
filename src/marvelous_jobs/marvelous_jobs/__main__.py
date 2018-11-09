@@ -438,11 +438,12 @@ def stop_mask():
 
     job = masking_server_job(db.get_project_name(),
                              db.get_coverage(),
-                             jobid=masking_status[0],
+                             config.get('DMserver', 'checkpoint_file'),
                              script_directory=config.get('general',
                                                          'script_directory'),
                              log_directory=config.get('general',
                                                       'log_directory'),
+                             jobid=masking_status[0],
                              port=config.getint('DMserver', 'port'),
                              threads=config.getint('DMserver', 'threads'),
                              constraint=config.get('DMserver', 'constraint'),
