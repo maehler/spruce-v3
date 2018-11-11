@@ -264,7 +264,7 @@ def backup_database():
     print('Backing up database...')
     db.backup('{0}.backup'.format(config.get('general', 'database')))
 
-def update_daligner_queue():
+def update_daligner_queue(n_tasks):
     config = mc()
     db = get_database()
     print('Checking database integrity...')
@@ -281,10 +281,14 @@ def update_daligner_queue():
         print('error: no jobs left to queue', file=sys.stderr)
         sys.exit(1)
 
+    max_slurm_jobs = config.getint('general', 'max_number_of_jobs')
+    if n_tasks is None:
+        n_tasks = max_slurm_jobs
+
     jobs_per_task = config.getint('daligner', 'jobs_per_task') * \
         config.getint('daligner', 'comparisons_per_job')
     max_tasks = min(jobs_not_started // jobs_per_task,
-                   config.getint('general', 'max_number_of_jobs'))
+                    n_tasks)
     queued_tasks = db.get_n_running_tasks()
 
     if db.any_using_masking():
@@ -292,8 +296,10 @@ def update_daligner_queue():
 
     if max_tasks == 0:
         tasks_to_queue = 1
+    elif max_slurm_jobs - queued_tasks < max_tasks:
+        tasks_to_queue = max_slurm_jobs - queued_tasks
     else:
-        tasks_to_queue = max_tasks - queued_tasks
+        tasks_to_queue = max_tasks
 
     if tasks_to_queue == 0:
         print('Queueing no jobs...')
@@ -683,8 +689,10 @@ def parse_args():
     dalign_update = dalign_subparsers.add_parser('update', help='submit '
                                                  'daligner jobs',
         description='Queue a new set of daligner jobs. The number of jobs '
-                    'that will be queued depends on the maximum number of '
+                    'that actually will be queued depends on the maximum number of '
                     'jobs that are allowed according to the config.ini file')
+    dalign_update.add_argument('-n', help='size of job array to queue',
+                               type=int)
 
     # daligner stop
     dalign_stop = dalign_subparsers.add_parser('stop', help='stop daligner jobs',
@@ -749,6 +757,9 @@ def parse_args():
         if not positive_integer(args.comparisons_per_job):
             parser.error('comparisons per job must be a '
                          'positive non-zero integer')
+    if args.subcommand == 'daligner' and args.subsubcommand == 'update':
+        if args.n is not None and not positive_integer(args.n):
+            parser.error('n must be a non-zero integer')
     if args.subcommand == 'daligner' and args.subsubcommand == 'reserve':
         if not positive_integer(args.n):
             parser.error('number of jobs must be a positive non-zero integer')
@@ -789,7 +800,7 @@ def main():
                        max_simultaneous_tasks=args.max_simultaneous_tasks,
                        comparisons_per_job=args.comparisons_per_job)
     if args.subcommand == 'daligner' and args.subsubcommand == 'update':
-        update_daligner_queue()
+        update_daligner_queue(n_tasks=args.n)
     if args.subcommand == 'daligner' and args.subsubcommand == 'stop':
         stop_daligner()
     if args.subcommand == 'daligner' and args.subsubcommand == 'reserve':
