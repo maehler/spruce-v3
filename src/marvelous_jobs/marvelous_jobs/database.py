@@ -218,14 +218,6 @@ class marvel_db:
                             statuses[ri]['failed'] = True
                             statuses[ri]['jobid'] = jobid
 
-                    fail_match = failed_regex.search(line)
-                    if fail_match:
-                        rowid = int(fail_match.group(1))
-                        if rowid not in rowids:
-                            continue
-                        statuses[rowid]['failed'] = True
-                        statuses[rowid]['jobid'] = jobid
-
         print('fetched status in {0}'.format(time.time() - start))
 
         query = '''UPDATE daligner_job SET
@@ -239,10 +231,10 @@ class marvel_db:
             textstatus = slurm_utils.status.reserved
             if status['completed']:
                 textstatus = slurm_utils.status.completed
-            elif status['started']:
-                textstatus = slurm_utils.status.running
             elif status['failed']:
                 textstatus = slurm_utils.status.failed
+            elif status['started']:
+                textstatus = slurm_utils.status.running
             self._c.execute(query, (textstatus, status['jobid'], ri))
         self._db.commit()
         print('updated database in {0}'.format(time.time() - start))
