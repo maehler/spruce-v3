@@ -10,7 +10,7 @@ def get_id_clusters(array_id):
     args = [
         'sacct', '-j', str(array_id),
         '--format',
-        'JobID,JobIDRaw,Node,Cluster,AveDiskRead,AveDiskWrite,Elapsed',
+        'JobID,JobIDRaw,Node,Cluster,AveDiskRead,AveDiskWrite,Elapsed,State',
         '--parsable2',
         '--delimiter', '\t',
         '--noheader'
@@ -24,7 +24,7 @@ def get_id_clusters(array_id):
     jobnodes = {}
     for line in stdout_data.splitlines():
         jobtask, batchjobid, node, cluster, \
-        diskread, diskwrite, elapsedtime = line.strip().split('\t')
+        diskread, diskwrite, elapsedtime, state = line.strip().split('\t')
         if not batch_regex.search(batchjobid):
             continue
         jobid = batchjobid.rstrip('.batch')
@@ -36,7 +36,8 @@ def get_id_clusters(array_id):
             'arrayid': arrayid,
             'diskread': diskread,
             'diskwrite': diskwrite,
-            'elapsed': elapsedtime
+            'elapsed': elapsedtime,
+            'state': state
         }
 
     return jobnodes
@@ -77,7 +78,8 @@ def get_run_data(job_nodes):
                     'swap_used_gb': float(swap_used),
                     'diskread': v['diskread'],
                     'diskwrite': v['diskwrite'],
-                    'core_percentage_used': core_percentages
+                    'core_percentage_used': core_percentages,
+                    'state': v['state']
                 })
 
     return all_stats, n_cores
@@ -87,14 +89,14 @@ def print_stats(s, n_cores, filename=None):
         outfile = open(filename, 'w')
     else:
         outfile = sys.stdout
-    print('\t'.join(['jobid_raw', 'jobid', 'node', 'localtime', 'raw_time',
+    print('\t'.join(['jobid_raw', 'jobid', 'node', 'state', 'localtime', 'raw_time',
                      'elapsed_time', 'mem_limit_gb', 'mem_used_gb', 'swap_used_gb',
                      'diskread', 'diskwrite',
                      '\t'.join('core{0}'.format(x) for x in range(1, n_cores + 1))]),
           file=outfile)
     for jobid, lines in s.items():
         for v in lines:
-            print('{raw_jobid}\t{jobid}\t{node}\t{localtime}\t{raw_time}\t{elapsed_time}\t'
+            print('{raw_jobid}\t{jobid}\t{node}\t{state}\t{localtime}\t{raw_time}\t{elapsed_time}\t'
                   '{mem_limit_gb}\t{mem_used_gb}\t{swap_used_gb}\t{diskread}\t{diskwrite}\t'
                   '{0}'.format('\t'.join(map(str, v['core_percentage_used'])), **v),
                   file=outfile)
