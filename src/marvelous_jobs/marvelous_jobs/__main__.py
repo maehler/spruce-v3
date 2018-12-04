@@ -202,6 +202,7 @@ def get_daligner_array(ntasks, config, db, masking_jobid=None):
     # Reserve jobs
     reservation_token = hashlib.md5(str(time.time()).encode('utf-8')).hexdigest()
     n_jobs = 0
+    rowids = []
     for i in range(1, ntasks + 1):
         reservation = db.reserve_daligner_jobs(token='{0}_{1}'.format(reservation_token, i),
                                                max_jobs=config.getint('daligner', 'jobs_per_task'),
@@ -212,6 +213,7 @@ def get_daligner_array(ntasks, config, db, masking_jobid=None):
             'daligner_task_{0}_{1}.txt'.format(reservation_token, i))
         with open(reservation_filename, 'w') as f:
             for d in reservation:
+                rowids += d['rowids']
                 n_jobs += len(d['rowids'])
                 f.write('\t'.join(map(str, [d['source_block']] + \
                                             d['rowids'] + \
@@ -245,13 +247,13 @@ def get_daligner_array(ntasks, config, db, masking_jobid=None):
                                                                     'correlation_rate'),
                                    threads=config.getint('daligner', 'threads'))
 
-    return job_array, n_jobs
+    return job_array, n_jobs, rowids
 
 def submit_daligner_jobs(ntasks, config, db, masking_jobid=None):
     if ntasks == 0:
         return
-    job_array, n_jobs = get_daligner_array(ntasks, config, db, masking_jobid)
-    return job_array.start(), n_jobs
+    job_array, n_jobs, rowids = get_daligner_array(ntasks, config, db, masking_jobid)
+    return job_array.start(), n_jobs, rowids
 
 def backup_database():
     config = mc()
@@ -308,7 +310,8 @@ def update_daligner_queue(n_tasks):
     print('Queueing jobs...')
 
     try:
-        jobid, n_jobs = submit_daligner_jobs(tasks_to_queue, config, db, db.get_masking_jobid())
+        jobid, n_jobs, rowids = submit_daligner_jobs(tasks_to_queue, config, db, db.get_masking_jobid())
+        db.set_daligner_jobids(rowids, jobid)
     except RuntimeError as rte:
         print('error: job submission failed\n{0}'.format(rte), file=sys.stderr)
         sys.exit(1)
@@ -341,25 +344,26 @@ def stop_daligner(status=(slurm_utils.status.running,
 def get_reservation_token():
     return hashlib.md5(str(time.time()).encode('utf-8')).hexdigest()
 
-def reserve_daligner(n_jobs, cancel=False):
+def cancel_daligner_reservation():
     config = mc()
     db = get_database()
 
-    if cancel:
-        db.cancel_daligner_reservation()
-        return
+    reserved_ids = db.get_daligner_jobs(status=slurm_utils.status.reserved)
+    reserved_jobids = set(db.get_daligner_jobids(reserved_ids).values())
+    db.cancel_daligner_reservation()
+    slurm_utils.cancel_jobs(reserved_jobids)
 
-    reservation_token = get_reservation_token()
+def list_reservations():
+    config = mc()
+    db = get_database()
 
-    try:
-        jobs = db.reserve_daligner_jobs(token=reservation_token,
-                                        max_jobs=n_jobs)
-    except sqlite3.OperationalError as oe:
-        print('error: {0}'.format(oe), file=sys.stderr)
-        exit(1)
+    update_statuses()
 
-    for j in jobs:
-        print('{rowid}\t{block_id1}\t{block_id2}'.format(**j))
+    rowids = db.get_daligner_jobs(status = slurm_utils.status.reserved)
+    blocks = db.get_daligner_blocks(rowids, with_jobid=True)
+
+    for b1, b2, jobid in blocks:
+        print('{0:4}\t{1:4}\t{2}'.format(b1, b2, jobid))
 
 def start_mask(threads=None, port=None, constraint=None, cluster=None):
     config = mc()
@@ -700,14 +704,11 @@ def parse_args():
                     'jobs.')
 
     # daligner list
-    dalign_reserve = dalign_subparsers.add_parser('reserve', help='reserve '
-                                                  'daligner jobs',
-        description='Reserve a number of jobs that will be run soon. These '
-                    'will get a status of RESERVED, and this prevents '
-                    'marvelous_jobs from queuing the same jobs in different '
-                    'job arrays.')
-    dalign_reserve.add_argument('-n', help='maximum number of jobs to reserve '
-                                '(default: 1)', default=1, type=int)
+    dalign_reserve = dalign_subparsers.add_parser('reservation',
+                                                  help='manage '
+                                                  'daligner job reservations',
+        description='List all current daligner reservations. '
+                    'Prints the IDs of block 1, block 2, and the SLURM job id.')
     dalign_reserve.add_argument('--cancel', help='cancel all active '
                                 'reservations', action='store_true')
 
@@ -760,9 +761,6 @@ def parse_args():
     if args.subcommand == 'daligner' and args.subsubcommand == 'update':
         if args.n is not None and not positive_integer(args.n):
             parser.error('n must be a non-zero integer')
-    if args.subcommand == 'daligner' and args.subsubcommand == 'reserve':
-        if not positive_integer(args.n):
-            parser.error('number of jobs must be a positive non-zero integer')
 
     if args.subcommand is None:
         parser.parse_args(['-h'])
@@ -803,8 +801,11 @@ def main():
         update_daligner_queue(n_tasks=args.n)
     if args.subcommand == 'daligner' and args.subsubcommand == 'stop':
         stop_daligner()
-    if args.subcommand == 'daligner' and args.subsubcommand == 'reserve':
-        reserve_daligner(n_jobs=args.n, cancel=args.cancel)
+    if args.subcommand == 'daligner' and args.subsubcommand == 'reservation':
+        if not args.cancel:
+            list_reservations()
+        else:
+            cancel_daligner_reservation()
     if args.subcommand == 'fix':
         update_and_restart()
     if args.subcommand == 'info':

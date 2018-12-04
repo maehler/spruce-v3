@@ -176,8 +176,7 @@ class marvel_db:
 
         statuses = {ri: {'started': False,
                          'completed': False,
-                         'failed': False,
-                         'jobid': None} for ri in rowids}
+                         'failed': False} for ri in rowids}
 
         for fname in os.listdir(log_directory):
             full_fname = os.path.join(log_directory, fname)
@@ -198,7 +197,6 @@ class marvel_db:
                             if ri not in rowids:
                                 continue
                             statuses[ri]['started'] = True
-                            statuses[ri]['jobid'] = jobid
 
                     end_match = completed_regex.search(line)
                     if end_match:
@@ -207,7 +205,6 @@ class marvel_db:
                             if ri not in rowids:
                                 continue
                             statuses[ri]['completed'] = True
-                            statuses[ri]['jobid'] = jobid
 
                     fail_match = failed_regex.search(line)
                     if fail_match:
@@ -216,13 +213,11 @@ class marvel_db:
                             if ri not in rowids:
                                 continue
                             statuses[ri]['failed'] = True
-                            statuses[ri]['jobid'] = jobid
 
         print('fetched status in {0}'.format(time.time() - start))
 
         query = '''UPDATE daligner_job SET
             status = ?,
-            jobid = ?,
             last_update = datetime("now", "localtime")
         WHERE rowid = ?'''
 
@@ -235,9 +230,17 @@ class marvel_db:
                 textstatus = slurm_utils.status.failed
             elif status['started']:
                 textstatus = slurm_utils.status.running
-            self._c.execute(query, (textstatus, status['jobid'], ri))
+            self._c.execute(query, (textstatus, ri))
         self._db.commit()
         print('updated database in {0}'.format(time.time() - start))
+
+    def set_daligner_jobids(self, rowids, jobid):
+        print('setting job ids...')
+        print(jobid, rowids)
+        query = '''UPDATE daligner_job SET jobid = ? WHERE rowid IN ({0})''' \
+                .format(','.join('?' for x in rowids))
+        self._c.execute(query, (jobid,) + tuple(rowids))
+        self._db.commit()
 
     def get_daligner_jobs(self, max_jobs=None, status=()):
         query = 'SELECT rowid FROM daligner_job'
@@ -258,6 +261,18 @@ class marvel_db:
         self._c.execute(query, args)
 
         return [j[0] for j in self._c.fetchall()]
+
+    def get_daligner_blocks(self, rowids, with_jobid=False):
+        query = '''SELECT block_id1, block_id2, jobid
+        FROM daligner_job WHERE rowid IN ({0})''' \
+                .format(','.join('?' for x in rowids))
+        self._c.execute(query, tuple(rowids))
+        res = self._c.fetchall()
+
+        if with_jobid:
+            return res
+
+        return [(x[0], x[1]) for x in res]
 
     def reserve_daligner_jobs(self, token, max_jobs=1, comparisons_per_job=1):
         self.begin_exclusive()
