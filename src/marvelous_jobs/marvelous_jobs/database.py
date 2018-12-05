@@ -110,6 +110,42 @@ class marvel_db:
             raise RuntimeError('block already exists')
         self._db.commit()
 
+    def get_n_blocks(self):
+        query = 'SELECT COUNT(*) FROM block'
+        self._c.execute(query)
+        return self._c.fetchone()[0]
+
+    def get_completed_blocks(self):
+        query1 = '''SELECT block_id1 AS block_id, COUNT(*)
+            FROM daligner_job
+            WHERE status = "COMPLETED"
+            GROUP BY block_id1'''
+
+        query2 = '''SELECT block_id2 AS block_id, COUNT(*)
+            FROM daligner_job
+            WHERE status = "COMPLETED" AND block_id1 != block_id2
+            GROUP BY block_id2'''
+
+        self._c.execute(query1)
+        block_counts = {}
+        for block, count in self._c.fetchall():
+            block_counts[block] = count
+
+        self._c.execute(query2)
+        for block, count in self._c.fetchall():
+            if block not in block_counts:
+                continue
+            block_counts[block] += count
+
+        n_blocks = self.get_n_blocks()
+
+        completed_blocks = []
+        for block, count in block_counts.items():
+            if count == n_blocks:
+                completed_blocks.append(block)
+
+        return completed_blocks
+
     def add_daligner_job(self, rowid, id1, id2, priority, use_masking_server=True):
         self._c.execute('''INSERT INTO daligner_job
                         (rowid, block_id1, block_id2, priority, use_masking, last_update)

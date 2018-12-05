@@ -36,6 +36,19 @@ def reset_dummy_jobs():
     db._c.execute(query)
     db._db.commit()
 
+def set_two_blocks_completed():
+    query = '''UPDATE daligner_job
+        SET jobid = "1_" || rowid, status = "COMPLETED",
+        reservation_token = "test_token"
+        WHERE rowid <= 1700'''
+    db._c.execute(query)
+    db._db.commit()
+
+@with_setup(set_two_blocks_completed, reset_dummy_jobs)
+def test_completed_blocks_count():
+    completed_blocks = db.get_completed_blocks()
+    assert_equals(len(completed_blocks), 2)
+
 def test_number_of_daligner_jobs():
     expected_number_of_jobs = n_blocks + n_blocks * (n_blocks - 1) / 2
     number_of_jobs = db.n_daligner_jobs()
