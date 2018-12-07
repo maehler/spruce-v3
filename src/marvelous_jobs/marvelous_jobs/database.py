@@ -271,8 +271,6 @@ class marvel_db:
         print('updated database in {0}'.format(time.time() - start))
 
     def set_daligner_jobids(self, rowids, jobid):
-        print('setting job ids...')
-        print(jobid, rowids)
         query = '''UPDATE daligner_job SET jobid = ? WHERE rowid IN ({0})''' \
                 .format(','.join('?' for x in rowids))
         self._c.execute(query, (jobid,) + tuple(rowids))
