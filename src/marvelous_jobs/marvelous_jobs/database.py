@@ -115,6 +115,11 @@ class marvel_db:
         self._c.execute(query)
         return self._c.fetchone()[0]
 
+    def get_blocks(self):
+        query = 'SELECT id FROM block'
+        self._c.execute(query)
+        return [x[0] for x in self._c.fetchall()]
+
     def get_completed_blocks(self):
         query1 = '''SELECT block_id1 AS block_id, COUNT(*)
             FROM daligner_job

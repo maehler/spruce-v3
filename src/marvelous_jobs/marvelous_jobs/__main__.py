@@ -353,6 +353,22 @@ def cancel_daligner_reservation():
     db.cancel_daligner_reservation()
     slurm_utils.cancel_jobs(reserved_jobids)
 
+def list_blocks():
+    config = mc()
+    db = get_database()
+
+    blocks = db.get_blocks()
+
+    print('\n'.join(map(str, blocks)))
+
+def list_completed_blocks():
+    config = mc()
+    db = get_database()
+
+    blocks = db.get_completed_blocks()
+
+    print('\n'.join(map(str, blocks)))
+
 def list_reservations():
     config = mc()
     db = get_database()
@@ -660,6 +676,12 @@ def parse_args():
     mask_stop = mask_subparsers.add_parser('stop', help='stop masking server',
                                            description='Stop the masking server.')
 
+    # blocks
+    block_parser = subparsers.add_parser('blocks', help='List block '
+                                         'information')
+    block_parser.add_argument('--complete', help='list completed blocks',
+                              action='store_true')
+
     # daligner
     dalign_parser = subparsers.add_parser('daligner', help='Run daligner',
         description='Manage daligner jobs.')
@@ -797,6 +819,11 @@ def main():
                        no_masking=args.no_masking,
                        max_simultaneous_tasks=args.max_simultaneous_tasks,
                        comparisons_per_job=args.comparisons_per_job)
+    if args.subcommand == 'blocks':
+        if args.complete:
+            list_completed_blocks()
+        else:
+            list_blocks()
     if args.subcommand == 'daligner' and args.subsubcommand == 'update':
         update_daligner_queue(n_tasks=args.n)
     if args.subcommand == 'daligner' and args.subsubcommand == 'stop':
