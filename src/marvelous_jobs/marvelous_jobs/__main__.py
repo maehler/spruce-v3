@@ -12,7 +12,7 @@ import time
 import marvelous_jobs as mj
 from marvelous_jobs import __version__
 from marvelous_jobs import marvelous_config as mc
-from marvelous_jobs import daligner_job_array, masking_server_job, prepare_job
+from marvelous_jobs import daligner_job_array, masking_server_job, prepare_job, merge_job_array
 from marvelous_jobs import slurm_utils
 
 import marvel
@@ -369,6 +369,62 @@ def list_completed_blocks():
 
     print('\n'.join(map(str, blocks)))
 
+def merge_blocks(n, n_files):
+    config = mc()
+    db = get_database()
+
+    project = db.get_project_name()
+    print('Fetching completed blocks...')
+    blocks = db.get_completed_blocks()
+
+    merged_filename = os.path.join(config.get('general', 'directory'),
+                                   '{}.{{}}.las'.format(project))
+
+    run_directory = os.path.join(config.get('general', 'directory'),
+                                 'merge_runs')
+    if not os.path.isdir(run_directory):
+        os.mkdir(run_directory)
+
+    reservation_token = get_reservation_token()
+    reservation_file = os.path.join(run_directory, 'merge_task_{}_{{}}.txt' \
+                                    .format(reservation_token))
+
+    blocks_to_merge = []
+    task_id = 0
+    print('Reserving blocks...')
+    for b in blocks:
+        if len(blocks_to_merge) == n:
+            break
+
+        fname = merged_filename.format(b)
+        if os.path.exists(fname):
+            # print('{} already exists'.format(os.path.basename(fname)))
+            continue
+
+        open(fname, 'a').close()
+        blocks_to_merge.append(b)
+        task_id += 1
+        with open(reservation_file.format(task_id), 'w') as f:
+            f.write('{}\n'.format(b))
+
+    print('Reserved {} blocks'.format(len(blocks_to_merge)))
+
+    merge_job = merge_job_array(blocks_to_merge,
+                                database_filename=config.get('general',
+                                                             'database'),
+                                n_files=n_files,
+                                script_directory=config.get('general',
+                                                            'script_directory'),
+                                log_directory=config.get('general',
+                                                         'log_directory'),
+                                reservation_token=reservation_token,
+                                run_directory=run_directory,
+                                account=config.get('general', 'account'))
+
+    jobid = merge_job.start()
+
+    print('Jobs submitted in job array {}'.format(jobid))
+
 def list_reservations():
     config = mc()
     db = get_database()
@@ -682,6 +738,19 @@ def parse_args():
     block_parser.add_argument('--complete', help='list completed blocks',
                               action='store_true')
 
+    block_subparsers = block_parser.add_subparsers(dest='subsubcommand',
+                                                   metavar='block-command')
+
+    # blocks merge
+    block_merge = block_subparsers.add_parser('merge', help='merge blocks',
+        description='Validate and merge LAS files from a block into a single '
+                    'LAS file.')
+    block_merge.add_argument('-n', help='maximum number of blocks to process '
+                             '(default: 1)', type=int, default=1)
+    block_merge.add_argument('-m', help='number of files to process '
+                             'simultaneously (default: 32)', type=int,
+                             default=32)
+
     # daligner
     dalign_parser = subparsers.add_parser('daligner', help='Run daligner',
         description='Manage daligner jobs.')
@@ -784,6 +853,12 @@ def parse_args():
         if args.n is not None and not positive_integer(args.n):
             parser.error('n must be a non-zero integer')
 
+    if args.subcommand == 'blocks' and args.subsubcommand == 'merge':
+        if not positive_integer(args.n):
+            parser.error('n must be a non-zero integer')
+        if not positive_integer(args.m):
+            parser.error('m must be a non-zero integer')
+
     if args.subcommand is None:
         parser.parse_args(['-h'])
 
@@ -819,11 +894,13 @@ def main():
                        no_masking=args.no_masking,
                        max_simultaneous_tasks=args.max_simultaneous_tasks,
                        comparisons_per_job=args.comparisons_per_job)
-    if args.subcommand == 'blocks':
+    if args.subcommand == 'blocks' and args.subsubcommand is None:
         if args.complete:
             list_completed_blocks()
         else:
             list_blocks()
+    if args.subcommand == 'blocks' and args.subsubcommand == 'merge':
+        merge_blocks(n=args.n, n_files=args.m)
     if args.subcommand == 'daligner' and args.subsubcommand == 'update':
         update_daligner_queue(n_tasks=args.n)
     if args.subcommand == 'daligner' and args.subsubcommand == 'stop':

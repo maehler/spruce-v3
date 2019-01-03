@@ -361,3 +361,79 @@ class masking_server_job(marvel_job):
                    'shutdown'],
                   shell=False)
         p.wait()
+
+class merge_job_array(marvel_job):
+
+    filename = 'las_merge.sh'
+
+    def __init__(self, blocks, database_filename, n_files=32,
+                 script_directory=None, log_directory=None,
+                 reservation_token=None, run_directory=None,
+                 account=None, timelimit='1-00:00:00',
+                 verbose=True):
+        jobname = 'las_merge'
+
+        if reservation_token is None:
+            raise ValueError('reservation token must not be None')
+        self.reservation_token = reservation_token
+
+        if run_directory is None:
+            self.run_directory = os.path.abspath('.')
+        else:
+            self.run_directory = run_directory
+
+        if script_directory is None:
+            self.filename = merge_job_array.filename
+        else:
+            self.filename = os.path.join(script_directory,
+                                         merge_job_array.filename)
+
+        if log_directory is None:
+            self.logfile = '{}_{}_%a_%A_%a.log' \
+                    .format(os.path.splitext(merge_job_array.filename)[0],
+                            self.reservation_token)
+        else:
+            self.logfile = os.path.join(log_directory, '{}_{}_%a_%A_%a.log' \
+                                        .format(os.path.splitext(merge_job_array.filename)[0],
+                                                self.reservation_token))
+
+        if len(blocks) > 1000:
+            raise ValueError('maximum 1000 blocks can be merged, tried to '
+                             'merge {}'.format(len(blocks)))
+
+        self.array_indices = '1-{}'.format(len(blocks))
+
+        sqlite_timeout = '-init <(echo .timeout 30000)'
+        args = [
+            ['reservation=$1'],
+            ['reservation_filename="{}/merge_task_${{reservation}}_${{SLURM_ARRAY_TASK_ID}}.txt"' \
+             .format(run_directory)],
+            ['echo', '"Using reservation in $reservation_filename"'],
+            ['block=$(cat ${reservation_filename})'],
+            ['db=$(sqlite3 {} {} "SELECT name FROM project")' \
+             .format(sqlite_timeout, database_filename)],
+            [],
+            ['LAmerge',
+             '-v' if verbose else '',
+             '-s',
+             '-C', 'A',
+             '-n', str(n_files),
+             '${db}',
+             '${db}.${block}.las',
+             '$(printf "d001_%05d" ${block})'],
+            ['LAcheck',
+             '-ps',
+             '${db}',
+             '${db}.${block}.las']
+        ]
+
+        super().__init__(args,
+                         jobname,
+                         self.filename,
+                         log_filename=self.logfile,
+                         timelimit=timelimit,
+                         account=account,
+                         array=self.array_indices)
+
+    def start(self, dryrun=False, force_write=False):
+        return super().start(dryrun, force_write, self.reservation_token)
