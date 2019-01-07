@@ -410,6 +410,7 @@ class merge_job_array(marvel_job):
              .format(run_directory)],
             ['echo', '"Using reservation in $reservation_filename"'],
             ['block=$(cat ${reservation_filename})'],
+            ['echo', '"Merging block ${block}"'],
             ['db=$(sqlite3 {} {} "SELECT name FROM project")' \
              .format(sqlite_timeout, database_filename)],
             [],
@@ -424,7 +425,8 @@ class merge_job_array(marvel_job):
             ['LAcheck',
              '-ps',
              '${db}',
-             '${db}.${block}.las']
+             '${db}.${block}.las'],
+            ['rm', '-r', '$(printf "d001_%05d" ${block})']
         ]
 
         super().__init__(args,
@@ -433,7 +435,8 @@ class merge_job_array(marvel_job):
                          log_filename=self.logfile,
                          timelimit=timelimit,
                          account=account,
-                         array=self.array_indices)
+                         array=self.array_indices,
+                         cores=2)
 
     def start(self, dryrun=False, force_write=False):
         return super().start(dryrun, force_write, self.reservation_token)

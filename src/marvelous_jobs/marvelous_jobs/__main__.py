@@ -419,7 +419,8 @@ def merge_blocks(n, n_files):
                                                          'log_directory'),
                                 reservation_token=reservation_token,
                                 run_directory=run_directory,
-                                account=config.get('general', 'account'))
+                                account=config.get('general', 'account'),
+                                verbose=False)
 
     jobid = merge_job.start()
 
