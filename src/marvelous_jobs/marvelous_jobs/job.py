@@ -422,10 +422,14 @@ class merge_job_array(marvel_job):
              '${db}',
              '${db}.${block}.las',
              '$(printf "d001_%05d" ${block})'],
+            [],
+            ['echo', '"Checking output file..."'],
             ['LAcheck',
              '-ps',
              '${db}',
              '${db}.${block}.las'],
+            [],
+            ['echo', '"Deleting input files..."'],
             ['rm', '-r', '$(printf "d001_%05d" ${block})']
         ]
 
