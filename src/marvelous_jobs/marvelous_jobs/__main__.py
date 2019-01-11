@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import os
 import queue
+import re
 import sqlite3
 from subprocess import Popen, PIPE
 import sys
@@ -12,7 +13,11 @@ import time
 import marvelous_jobs as mj
 from marvelous_jobs import __version__
 from marvelous_jobs import marvelous_config as mc
-from marvelous_jobs import daligner_job_array, masking_server_job, prepare_job, merge_job_array
+from marvelous_jobs import daligner_job_array
+from marvelous_jobs import masking_server_job
+from marvelous_jobs import prepare_job
+from marvelous_jobs import merge_job_array
+from marvelous_jobs import annotate_job_array
 from marvelous_jobs import slurm_utils
 
 import marvel
@@ -369,7 +374,7 @@ def list_completed_blocks():
 
     print('\n'.join(map(str, blocks)))
 
-def merge_blocks(n, n_files):
+def merge_blocks(n, n_files, max_simultaneous_tasks=None):
     config = mc()
     db = get_database()
 
@@ -413,6 +418,7 @@ def merge_blocks(n, n_files):
                                 database_filename=config.get('general',
                                                              'database'),
                                 n_files=n_files,
+                                max_simultaneous_tasks=max_simultaneous_tasks,
                                 script_directory=config.get('general',
                                                             'script_directory'),
                                 log_directory=config.get('general',
@@ -423,6 +429,97 @@ def merge_blocks(n, n_files):
                                 verbose=False)
 
     jobid = merge_job.start()
+
+    print('Jobs submitted in job array {}'.format(jobid))
+
+def get_merged_blocks():
+    """Get a list of merged blocks.
+
+    A block is considered merged if the merged file exists,
+    has a size larger than 0, and the latest modification of
+    it happened at least five minutes ago.
+
+    Returns
+    -------
+    list
+        A list of integers corresponding to the IDs of
+        merged blocks.
+    """
+    config = mc()
+    db = get_database()
+
+    directory = config.get('general', 'directory')
+    project = db.get_project_name()
+
+    las_regex = re.compile(r'^{}\.(\d+)\.las$'.format(project))
+
+    merged_blocks = []
+    for fname in os.listdir(directory):
+        if las_regex.match(fname):
+            fs = os.stat(os.path.join(directory, fname))
+            if fs.st_size > 0 and \
+                    time.time() - fs.st_mtime > 5*60:
+                merged_blocks.append(int(las_regex.match(fname).group(1)))
+
+    return sorted(merged_blocks)
+
+def annotate_blocks(n, max_simultaneous_tasks, force=False):
+    config = mc()
+    db = get_database()
+
+    project = db.get_project_name()
+    directory = config.get('general', 'directory')
+    print('Fetching merged blocks...')
+    blocks = get_merged_blocks()
+    print('{} merged blocks found'.format(len(blocks)))
+
+    run_directory = os.path.join(directory, 'annotate_runs')
+    if not os.path.exists(run_directory):
+        os.mkdir(run_directory)
+    reservation_token = get_reservation_token()
+    reservation_file = os.path.join(run_directory,
+                                    'annotate_task_{}_{{}}.txt' \
+                                        .format(reservation_token))
+
+    q_file = os.path.join(directory, '.{}.{{}}.q.a2'.format(project))
+    trim_file = os.path.join(directory, '.{}.{{}}.trim.a2'.format(project))
+
+    print('Reserving blocks...')
+    blocks_to_annotate = []
+    task_id = 0
+    for b in blocks:
+        if not force \
+           and os.path.exists(q_file.format(b)) \
+           and os.path.exists(trim_file.format(b)):
+            continue
+
+        if len(blocks_to_annotate) == n:
+            break
+
+        open(trim_file.format(b), 'a').close()
+        open(q_file.format(b), 'a').close()
+        blocks_to_annotate.append(b)
+
+        task_id += 1
+        with open(reservation_file.format(task_id), 'w') as f:
+            f.write('{}\n'.format(b))
+    print('Reserved {} blocks'.format(len(blocks_to_annotate)))
+    if len(blocks_to_annotate) == 0:
+        print('No blocks to annotate')
+        return
+
+    job = annotate_job_array(blocks_to_annotate,
+                             config.get('general', 'database'),
+                             max_simultaneous_tasks,
+                             script_directory=config.get('general',
+                                                         'script_directory'),
+                             log_directory=config.get('general',
+                                                      'log_directory'),
+                             reservation_token=reservation_token,
+                             run_directory=run_directory,
+                             account=config.get('general', 'account'))
+
+    jobid = job.start()
 
     print('Jobs submitted in job array {}'.format(jobid))
 
@@ -748,9 +845,27 @@ def parse_args():
                     'LAS file.')
     block_merge.add_argument('-n', help='maximum number of blocks to process '
                              '(default: 1)', type=int, default=1)
+    block_merge.add_argument('--max-simultaneous-tasks', help='maximum number '
+                             'of tasks allowed to run simultaneously '
+                             '(default: N)', type=int)
     block_merge.add_argument('-m', help='number of files to process '
                              'simultaneously (default: 32)', type=int,
                              default=32)
+
+    # blocks annotate
+    block_annotate = block_subparsers.add_parser('annotate',
+                                                 help='annotate blocks',
+                                                 description='Create quality '
+                                                 'and trim annotation tracks '
+                                                 'for a LAS file.')
+    block_annotate.add_argument('-n', help='maximum number of blocks to process '
+                                '(default: 1)', type=int, default=1)
+    block_annotate.add_argument('--max-simultaneous-tasks', help='maximum number '
+                                'of tasks allowed to run simultaneously '
+                                '(default: N)', type=int)
+    block_annotate.add_argument('-f', '--force', help='start annotation even if '
+                                'annotation files already exist',
+                                action='store_true')
 
     # daligner
     dalign_parser = subparsers.add_parser('daligner', help='Run daligner',
@@ -854,9 +969,14 @@ def parse_args():
         if args.n is not None and not positive_integer(args.n):
             parser.error('n must be a non-zero integer')
 
-    if args.subcommand == 'blocks' and args.subsubcommand == 'merge':
+    if args.subcommand == 'blocks' and (args.subsubcommand == 'merge' \
+                                        or args.subsubcommand == 'annotate'):
         if not positive_integer(args.n):
             parser.error('n must be a non-zero integer')
+        if args.max_simultaneous_tasks is not None and \
+                not positive_integer(args.max_simultaneous_tasks):
+            parser.error('max-simultaneous-tasks must be a non-zero integer')
+    if args.subcommand == 'blocks' and args.subsubcommand == 'merge':
         if not positive_integer(args.m):
             parser.error('m must be a non-zero integer')
 
@@ -901,7 +1021,12 @@ def main():
         else:
             list_blocks()
     if args.subcommand == 'blocks' and args.subsubcommand == 'merge':
-        merge_blocks(n=args.n, n_files=args.m)
+        merge_blocks(n=args.n, n_files=args.m,
+                     max_simultaneous_tasks=args.max_simultaneous_tasks)
+    if args.subcommand == 'blocks' and args.subsubcommand == 'annotate':
+        annotate_blocks(n=args.n,
+                        max_simultaneous_tasks=args.max_simultaneous_tasks,
+                        force=args.force)
     if args.subcommand == 'daligner' and args.subsubcommand == 'update':
         update_daligner_queue(n_tasks=args.n)
     if args.subcommand == 'daligner' and args.subsubcommand == 'stop':
