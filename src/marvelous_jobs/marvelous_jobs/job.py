@@ -367,10 +367,10 @@ class merge_job_array(marvel_job):
     filename = 'las_merge.sh'
 
     def __init__(self, blocks, database_filename, n_files=32,
-                 script_directory=None, log_directory=None,
-                 reservation_token=None, run_directory=None,
-                 account=None, timelimit='1-00:00:00',
-                 verbose=True):
+                 max_simultaneous_tasks=None, script_directory=None,
+                 log_directory=None, reservation_token=None,
+                 run_directory=None, account=None,
+                 timelimit='1-00:00:00', verbose=True):
         jobname = 'las_merge'
 
         if reservation_token is None:
@@ -402,6 +402,8 @@ class merge_job_array(marvel_job):
                              'merge {}'.format(len(blocks)))
 
         self.array_indices = '1-{}'.format(len(blocks))
+        if max_simultaneous_tasks is not None:
+            self.array_indices += '%{}'.format(max_simultaneous_tasks)
 
         sqlite_timeout = '-init <(echo .timeout 30000)'
         args = [
@@ -422,12 +424,6 @@ class merge_job_array(marvel_job):
              '${db}',
              '${db}.${block}.las',
              '$(printf "d001_%05d" ${block})'],
-            [],
-            ['echo', '"Checking output file..."'],
-            ['LAcheck',
-             '-ps',
-             '${db}',
-             '${db}.${block}.las'],
             [],
             ['echo', '"Deleting input files..."'],
             ['rm', '-r', '$(printf "d001_%05d" ${block})']
