@@ -484,7 +484,7 @@ def annotate_blocks(n, max_simultaneous_tasks, force=False):
     q_file = os.path.join(directory, '.{}.{{}}.q.a2'.format(project))
     trim_file = os.path.join(directory, '.{}.{{}}.trim.a2'.format(project))
 
-    print('Reserving blocks...')
+    print('Reserving maximum {} blocks...'.format(n))
     blocks_to_annotate = []
     task_id = 0
     for b in blocks:
