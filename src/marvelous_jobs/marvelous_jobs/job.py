@@ -8,10 +8,38 @@ import marvel
 import marvelous_jobs as mj
 
 class marvel_job:
+    """Base class for all MARVEL jobs.
+
+    This class should most likely not be instantiated
+    directly, but rather be the parent of a more specialised
+    class.
+    """
 
     def __init__(self, args, jobname, filename,
                  log_filename=None, account=None,
                  jobid=None, **kwargs):
+        """Instantiate a marvel_job.
+
+        Parameters
+        ---------
+        args : list of list of str
+            A list of lists, each representing a line
+            in the generated script.
+        jobname : str
+            Name of the job as used by SLURM.
+        filename : str
+            Absolute path where the script should be
+            saved.
+        log_filename : str, optional
+            Absolute path to the SLURM log file. If
+            not given, the default log file will be
+            generated.
+        account : str, optional
+            SLURM account that the job should run under.
+        jobid : int, optional
+            Set the jobid if this is a job that is
+            already running.
+        """
         self.sbatch_args = kwargs
         self.args = args
         self.jobname = jobname
@@ -24,6 +52,13 @@ class marvel_job:
             self.args = [self.args]
 
     def commandline(self):
+        """Generate a (possibly multiline) command line string.
+
+        Returns
+        -------
+        str
+            The generated command line.
+        """
         lines = []
         for args in self.args:
             lines.append(' '.join(str(x) for x in args if x is not None \
@@ -31,6 +66,14 @@ class marvel_job:
         return '\n'.join(lines)
 
     def save_script(self):
+        """Save the script on disk.
+
+        The script is saved in the following cases:
+            1. The file does not already exist.
+            2. The file exists and the content
+               differs from what will be written
+               (based on the md5 digest).
+        """
         str_script = str(self)
         if os.path.isfile(self.filename):
             with open(self.filename) as f:
@@ -44,6 +87,32 @@ class marvel_job:
                 f.write(str_script)
 
     def start(self, dryrun=False, force_write=False, *args):
+        """Start the job.
+
+        Parameters
+        ----------
+        dryrun : bool
+            If True, then return the command line for
+            submitting the script. If False, submit the
+            job.
+        force_write : bool
+            If True, write the script to file, regardless
+            of whether the script already exists or not.
+            If False, only write the script if it doesn't
+            already exist.
+        *args
+            Additional arguments to be passed to the script.
+
+        Returns
+        -------
+        int
+            The job ID of the submission.
+
+        Raises
+        ------
+        RuntimeError
+            If the job submission prints on stderr.
+        """
         if not os.path.isfile(self.filename) or force_write:
             self.save_script()
         run_args = ['sbatch',
@@ -72,6 +141,15 @@ class marvel_job:
         return self.jobid
 
     def cancel(self):
+        """Cancel the job.
+
+        Cancel the SLURM job, if the job has a job ID.
+
+        Raises
+        ------
+        RuntimeError
+            If the job does not have a jobid.
+        """
         if self.jobid is None:
             raise RuntimeError('job has not been queued yet')
         p = Popen(['scancel', str(self.jobid)], shell=False)
