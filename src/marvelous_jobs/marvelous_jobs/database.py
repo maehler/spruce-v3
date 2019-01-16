@@ -6,7 +6,6 @@ import subprocess
 import time
 
 from marvelous_jobs import slurm_utils
-from marvelous_jobs.job import daligner_job
 
 class marvel_db:
 

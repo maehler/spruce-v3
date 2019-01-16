@@ -240,69 +240,6 @@ class daligner_job_array(marvel_job):
     def start(self, dryrun=False, force_write=False):
         return super().start(dryrun, force_write, self.reservation_token)
 
-class daligner_job(marvel_job):
-
-    filename = 'daligner.sh'
-
-    def __init__(self, rowid, database_filename, script_directory=None,
-                 masking_jobid=None, masking_port=None, jobid=None,
-                 priority=None, status=None, account=None,
-                 timelimit='1:00:00', verbose=True, identity=True,
-                 tuple_suppression_frequency=20, correlation_rate=0.7,
-                 threads=4):
-        self.rowid = rowid
-        self.priority = priority
-        self.status = status
-        self.use_masking_server = masking_jobid is not None
-        if script_directory is None:
-            self.filename = daligner_job.filename
-        else:
-            self.filename = os.path.join(script_directory,
-                                         daligner_job.filename)
-
-        args = [
-            ['rowid=$1'],
-            ['project=$(sqlite3', database_filename,
-             '"SELECT name FROM project")'],
-            # Get block information
-            ['block1=$(sqlite3', database_filename,
-             '"SELECT block_id1 FROM daligner_job WHERE rowid = $rowid")'],
-            ['block2=$(sqlite3', database_filename,
-             '"SELECT block_id2 FROM daligner_job WHERE rowid = $rowid")'],
-            [],
-            # Masking server
-            ['maskip=$(sqlite3 {0} "SELECT ip FROM masking_job")' \
-                .format(database_filename)],
-            ['if [[ {0} = true ]] && [[ -z $maskip ]]; then' \
-                .format('true' if self.use_masking_server else 'false')],
-            ['\techo >&2 "error: no masking server available"'],
-            ['\texit 1'],
-            ['fi'],
-            [],
-            # daligner
-            [os.path.join(marvel.config.PATH_BIN, 'daligner'),
-             '-v' if verbose else '',
-             '-I' if identity else '',
-             '-t', tuple_suppression_frequency,
-             '-e', correlation_rate,
-             '-D' if self.use_masking_server else '',
-             '${{maskip}}:{0}'.format(masking_port) \
-                if self.use_masking_server else '',
-             '-j', threads,
-             '"${project}.${block1}"', '"${project}.${block2}"']
-        ]
-
-        super().__init__(args,
-                         'daligner_{0}'.format(self.rowid),
-                         self.filename,
-                         timelimit=timelimit,
-                         jobid=jobid, cores=threads,
-                         after=masking_jobid,
-                         account=account)
-
-    def start(self, dryrun=False):
-        return super().start(dryrun=dryrun, force_write=False, *[self.rowid])
-
 class masking_server_job(marvel_job):
 
     filename = 'marvel_masking.sh'
