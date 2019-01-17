@@ -381,7 +381,7 @@ class merge_job_array(marvel_job):
 
     filename = 'las_merge.sh'
 
-    def __init__(self, blocks, database_filename, n_files=32,
+    def __init__(self, blocks, project, n_files=32,
                  max_simultaneous_tasks=None, script_directory=None,
                  log_directory=None, reservation_token=None,
                  run_directory=None, account=None,
@@ -428,8 +428,7 @@ class merge_job_array(marvel_job):
             ['echo', '"Using reservation in $reservation_filename"'],
             ['block=$(cat ${reservation_filename})'],
             ['echo', '"Merging block ${block}"'],
-            ['db=$(sqlite3 {} {} "SELECT name FROM project")' \
-             .format(sqlite_timeout, database_filename)],
+            ['db="{}"'.format(project),
             [],
             ['LAmerge',
              '-v' if verbose else '',
@@ -460,7 +459,7 @@ class annotate_job_array(marvel_job):
 
     filename = 'annotate_block.sh'
 
-    def __init__(self, blocks, database_filename,
+    def __init__(self, blocks, project,
                  max_simultaneous_tasks=None, script_directory=None,
                  log_directory=None, reservation_token=None,
                  run_directory=None, account=None,
@@ -507,8 +506,7 @@ class annotate_job_array(marvel_job):
             ['echo', '"Using reservation in $reservation_filename"'],
             ['block=$(cat ${reservation_filename})'],
             ['echo', '"Merging block ${block}"'],
-            ['db=$(sqlite3 {} {} "SELECT name FROM project")' \
-             .format(sqlite_timeout, database_filename)],
+            ['db="{}"'.format(project),
             [],
             ['LAq',
              '-b', '${block}',

@@ -416,8 +416,7 @@ def merge_blocks(n, n_files, max_simultaneous_tasks=None):
     print('Reserved {} blocks'.format(len(blocks_to_merge)))
 
     merge_job = merge_job_array(blocks_to_merge,
-                                database_filename=config.get('general',
-                                                             'database'),
+                                project,
                                 n_files=n_files,
                                 max_simultaneous_tasks=max_simultaneous_tasks,
                                 script_directory=config.get('general',
@@ -510,7 +509,7 @@ def annotate_blocks(n, max_simultaneous_tasks, force=False):
         return
 
     job = annotate_job_array(blocks_to_annotate,
-                             config.get('general', 'database'),
+                             project,
                              max_simultaneous_tasks,
                              script_directory=config.get('general',
                                                          'script_directory'),
