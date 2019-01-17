@@ -527,3 +527,83 @@ class annotate_job_array(marvel_job):
 
     def start(self, dryrun=False, force_write=False):
         return super().start(dryrun, force_write, self.reservation_token)
+
+class patch_job_array(marvel_job):
+
+    filename = 'patch_block.sh'
+    out_filename = '{db}.{block}.fixed.fasta'
+
+    def __init__(self,
+                 blocks,
+                 project,
+                 max_simultaneous_tasks=None,
+                 script_directory=None,
+                 log_directory=None,
+                 reservation_token=None,
+                 run_directory=None,
+                 account=None,
+                 timelimit='1-00:00:00'):
+
+        jobname = 'patching'
+
+        if reservation_token is None:
+            raise ValueError('reservation token must not be None')
+        self.reservation_token = reservation_token
+
+        if run_directory is None:
+            self.run_directory = os.path.abspath('.')
+        else:
+            self.run_directory = run_directory
+
+        if script_directory is None:
+            self.filename = patch_job_array.filename
+        else:
+            self.filename = os.path.join(script_directory,
+                                         patch_job_array.filename)
+
+        if log_directory is None:
+            self.logfile = '{}_{}_%a_%A_%a.log' \
+                    .format(os.path.splitext(patch_job_array.filename)[0],
+                            self.reservation_token)
+        else:
+            self.logfile = os.path.join(log_directory, '{}_{}_%a_%A_%a.log' \
+                                        .format(os.path.splitext(patch_job_array.filename)[0],
+                                                self.reservation_token))
+
+        if len(blocks) > 1000:
+            raise ValueError('maximum 1000 blocks can be run, tried to '
+                             'merge {}'.format(len(blocks)))
+
+        self.array_indices = '1-{}'.format(len(blocks))
+        if max_simultaneous_tasks is not None:
+            self.array_indices += '%{}'.format(max_simultaneous_tasks)
+
+        args = [
+            ['reservation=$1'],
+            ['reservation_filename="{}/patch_task_${{reservation}}_${{SLURM_ARRAY_TASK_ID}}.txt"' \
+             .format(run_directory)],
+            ['echo', '"Using reservation in $reservation_filename"'],
+            ['block=$(cat ${reservation_filename})'],
+            ['echo', '"Patching block ${block}"'],
+            ['db="{}"'.format(project)],
+            [],
+            ['LAfix',
+             '-t', '${block}.trim',
+             '-q', '${block}.q',
+             '-x', '3000',
+             '${db}',
+             '${db}.${block}.las',
+             '${db}.${block}.fixed.fasta']
+        ]
+
+        super().__init__(args,
+                         jobname,
+                         self.filename,
+                         log_filename=self.logfile,
+                         timelimit=timelimit,
+                         account=account,
+                         array=self.array_indices,
+                         cores=1)
+
+    def start(self, dryrun=False, force_write=False):
+        return super().start(dryrun, force_write, self.reservation_token)

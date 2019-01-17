@@ -18,6 +18,7 @@ from marvelous_jobs import masking_server_job
 from marvelous_jobs import prepare_job
 from marvelous_jobs import merge_job_array
 from marvelous_jobs import annotate_job_array
+from marvelous_jobs import patch_job_array
 from marvelous_jobs import slurm_utils
 
 import marvel
@@ -523,6 +524,69 @@ def annotate_blocks(n, max_simultaneous_tasks, force=False):
 
     print('Jobs submitted in job array {}'.format(jobid))
 
+def patch_blocks(n, max_simultaneous_tasks, force=False):
+    config = mc()
+    db = get_database()
+
+    project = db.get_project_name()
+    directory = config.get('general', 'directory')
+    print('Fetching merged blocks...')
+    blocks = get_merged_blocks()
+    print('{} merged blocks found'.format(len(blocks)))
+
+    run_directory = os.path.join(directory, 'patch_runs')
+    if not os.path.exists(run_directory):
+        os.mkdir(run_directory)
+    reservation_token = get_reservation_token()
+    reservation_file = os.path.join(run_directory,
+                                    'patch_task_{}_{{}}.txt' \
+                                    .format(reservation_token))
+
+    #fasta_file = os.path.join(directory, '{}.{{}}.fixed.fasta'.format(project))
+    q_file = os.path.join(directory, '.{}.{{}}.q.a2'.format(project))
+
+    print('Reserving maximum {} blocks...'.format(n))
+    blocks_to_patch = []
+    task_id = 0
+    for b in blocks:
+        if not os.path.exists(q_file.format(b)):
+            continue
+
+        fasta_file = os.path.join(directory,
+                                  patch_job_array.out_filename \
+                                    .format(db=project, block=b))
+        if not force \
+           and os.path.exists(fasta_file):
+            continue
+
+        if len(blocks_to_patch) == n:
+            break
+
+        open(fasta_file, 'a').close()
+        blocks_to_patch.append(b)
+
+        task_id += 1
+        with open(reservation_file.format(task_id), 'w') as f:
+            f.write('{}\n'.format(b))
+    print('Reserved {} blocks'.format(len(blocks_to_patch)))
+    if len(blocks_to_patch) == 0:
+        print('No blocks available to patch')
+        return
+
+    job = patch_job_array(blocks_to_patch,
+                          project,
+                          max_simultaneous_tasks,
+                          script_directory=config.get('general',
+                                                      'script_directory'),
+                          log_directory=config.get('general', 'log_directory'),
+                          reservation_token=reservation_token,
+                          run_directory=run_directory,
+                          account=config.get('general', 'account'))
+
+    jobid = job.start()
+
+    print('Jobs submitted in job array {}'.format(jobid))
+
 def list_reservations():
     config = mc()
     db = get_database()
@@ -867,6 +931,20 @@ def parse_args():
                                 'annotation files already exist',
                                 action='store_true')
 
+    # blocks patch
+    block_patch = block_subparsers.add_parser('patch',
+                                              help='patch blocks',
+                                              description='Run LAfix on a '
+                                              'merged and annotated block.')
+    block_patch.add_argument('-n', help='maximum number of blocks to process '
+                             '(default: 1)', type=int, default=1)
+    block_patch.add_argument('--max-simultaneous-tasks', help='maximum number '
+                             'of tasks allowed to run simultaneously '
+                             '(default: N)', type=int)
+    block_patch.add_argument('-f', '--force', help='start patching even if '
+                             'the corresponding fasta file already exists',
+                             action='store_true')
+
     # daligner
     dalign_parser = subparsers.add_parser('daligner', help='Run daligner',
         description='Manage daligner jobs.')
@@ -970,7 +1048,8 @@ def parse_args():
             parser.error('n must be a non-zero integer')
 
     if args.subcommand == 'blocks' and (args.subsubcommand == 'merge' \
-                                        or args.subsubcommand == 'annotate'):
+                                        or args.subsubcommand == 'annotate' \
+                                        or args.subsubcommand == 'patch'):
         if not positive_integer(args.n):
             parser.error('n must be a non-zero integer')
         if args.max_simultaneous_tasks is not None and \
@@ -1027,6 +1106,10 @@ def main():
         annotate_blocks(n=args.n,
                         max_simultaneous_tasks=args.max_simultaneous_tasks,
                         force=args.force)
+    if args.subcommand == 'blocks' and args.subsubcommand == 'patch':
+        patch_blocks(n=args.n,
+                     max_simultaneous_tasks=args.max_simultaneous_tasks,
+                     force=args.force)
     if args.subcommand == 'daligner' and args.subsubcommand == 'update':
         update_daligner_queue(n_tasks=args.n)
     if args.subcommand == 'daligner' and args.subsubcommand == 'stop':
