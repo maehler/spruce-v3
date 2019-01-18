@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='marvelous_jobs',
-    version='0.11.0',
+    version='0.11.2',
     packages=find_packages(),
 
     entry_points={

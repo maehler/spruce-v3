@@ -529,7 +529,7 @@ class annotate_job_array(marvel_job):
 class patch_job_array(marvel_job):
 
     filename = 'patch_block.sh'
-    out_filename = '{db}.{block}.fixed.fasta'
+    out_filename = '{db}.{block}.patched.fasta'
 
     def __init__(self,
                  blocks,
@@ -540,7 +540,7 @@ class patch_job_array(marvel_job):
                  reservation_token=None,
                  run_directory=None,
                  account=None,
-                 timelimit='1-00:00:00'):
+                 timelimit='4:00:00'):
 
         jobname = 'patching'
 
@@ -586,12 +586,11 @@ class patch_job_array(marvel_job):
             ['db="{}"'.format(project)],
             [],
             ['LAfix',
-             '-t', '${block}.trim',
-             '-q', '${block}.q',
+             '-g', '-1',
              '-x', '3000',
              '${db}',
              '${db}.${block}.las',
-             '${db}.${block}.fixed.fasta']
+             patch_job_array.out_filename.format(db='${db}', block='${block}')]
         ]
 
         super().__init__(args,

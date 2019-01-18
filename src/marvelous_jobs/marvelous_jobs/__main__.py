@@ -529,6 +529,36 @@ def patch_blocks(n, max_simultaneous_tasks, force=False):
 
     project = db.get_project_name()
     directory = config.get('general', 'directory')
+
+    # Check if the merged annotation files are available
+    q_files = [os.path.join(directory, '{}.q.{}2'.format(project, x)) \
+              for x in ['a', 'd']]
+    trim_files = [os.path.join(directory, '{}.trim.{}2'.format(project, x)) \
+                  for x in ['a', 'd']]
+    block_annot_file = os.path.join(directory, '.{}.{{}}.{{}}.{{}}2'.format(project))
+    if not all(os.path.exists(x) for x in q_files) \
+       or not all(os.path.exists(y) for y in trim_files):
+        print('Merged annotation files not found, '
+              'looking for block annotations.')
+        # Are all block-specific files present?
+        missing_annot = False
+        for b in range(1, db.get_n_blocks()+1):
+            if not os.path.exists(block_annot_file.format(b, 'q', 'a')) \
+               or not os.path.exists(block_annot_file.format(b, 'q', 'd')) \
+               or not os.path.exists(block_annot_file.format(b, 'trim', 'a')) \
+               or not os.path.exists(block_annot_file.format(b, 'trim', 'd')):
+                missing_annot = True
+                break
+        if missing_annot:
+            print('Some block annotations are missing.\n'
+                  'Run marvelous_jobs blocks annotate to generate these.',
+                  file=sys.stderr)
+        else:
+            print('All block annotations are ready, '
+                  'but TKmerge has to be run before '
+                  'patching can start')
+        exit(1)
+
     print('Fetching merged blocks...')
     blocks = get_merged_blocks()
     print('{} merged blocks found'.format(len(blocks)))
