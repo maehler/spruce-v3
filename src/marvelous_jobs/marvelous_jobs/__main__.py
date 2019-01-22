@@ -19,6 +19,7 @@ from marvelous_jobs import prepare_job
 from marvelous_jobs import merge_job_array
 from marvelous_jobs import annotate_job_array
 from marvelous_jobs import patch_job_array
+from marvelous_jobs import stats_job_array
 from marvelous_jobs import slurm_utils
 
 import marvel
@@ -616,6 +617,69 @@ def patch_blocks(n, max_simultaneous_tasks, force=False):
 
     print('Jobs submitted in job array {}'.format(jobid))
 
+def block_stats(n, max_simultaneous_tasks=None, force=False):
+    config = mc()
+    db = get_database()
+
+    project = db.get_project_name()
+    directory = config.get('general', 'directory')
+
+    get_merged_blocks()
+
+    print('Fetching merged blocks...')
+    blocks = get_merged_blocks()
+    print('{} merged blocks found'.format(len(blocks)))
+
+    run_directory = os.path.join(directory, 'stats_runs')
+    if not os.path.exists(run_directory):
+        os.mkdir(run_directory)
+    reservation_token = get_reservation_token()
+    reservation_file = os.path.join(run_directory,
+                                    'stats_task_{}_{{}}.txt' \
+                                        .format(reservation_token))
+
+    output_dir = os.path.join(directory, 'stats')
+    if not os.path.exists(output_dir):
+        os.mkdir(output_dir)
+    stats_file_template = os.path.join(output_dir, '{}.{}.stats.txt')
+
+    print('Reserving maximum {} blocks...'.format(n))
+    blocks_to_do = []
+    task_id = 0
+    for b in blocks:
+        if len(blocks_to_do) == n:
+            break
+
+        stats_file = stats_file_template.format(project, b)
+        if not force and os.path.exists(stats_file):
+            continue
+
+        open(stats_file, 'a').close()
+
+        blocks_to_do.append(b)
+        task_id += 1
+        with open(reservation_file.format(task_id), 'w') as f:
+            f.write('{}\n'.format(b))
+    print('Reserved {} blocks'.format(len(blocks_to_do)))
+    if len(blocks_to_do) == 0:
+        print('No blocks to process')
+        return
+
+    job = stats_job_array(blocks_to_do,
+                          project,
+                          stats_file_template,
+                          max_simultaneous_tasks=max_simultaneous_tasks,
+                          script_directory=config.get('general',
+                                                      'script_directory'),
+                          log_directory=config.get('general', 'log_directory'),
+                          reservation_token=reservation_token,
+                          run_directory=run_directory,
+                          account=config.get('general', 'account'))
+
+    jobid = job.start()
+
+    print('Jobs submitted in job array {}'.format(jobid))
+
 def list_reservations():
     config = mc()
     db = get_database()
@@ -974,6 +1038,21 @@ def parse_args():
                              'the corresponding fasta file already exists',
                              action='store_true')
 
+    # blocks stats
+    block_stats = block_subparsers.add_parser('stats',
+                                              help='calculate summary '
+                                              'statistics',
+                                              description='Run LAstats on '
+                                              'a merged block.')
+    block_stats.add_argument('-n', help='maximum number of blocks to process '
+                             '(default: 1)', type=int, default=1)
+    block_stats.add_argument('--max-simultaneous-tasks', help='maximum number '
+                             'of tasks allowed to run simultaneously '
+                             '(default: N)', type=int)
+    block_stats.add_argument('-f', '--force', help='start patching even if '
+                             'the corresponding fasta file already exists',
+                             action='store_true')
+
     # daligner
     dalign_parser = subparsers.add_parser('daligner', help='Run daligner',
         description='Manage daligner jobs.')
@@ -1078,7 +1157,8 @@ def parse_args():
 
     if args.subcommand == 'blocks' and (args.subsubcommand == 'merge' \
                                         or args.subsubcommand == 'annotate' \
-                                        or args.subsubcommand == 'patch'):
+                                        or args.subsubcommand == 'patch' \
+                                        or args.subsubcommand == 'stats'):
         if not positive_integer(args.n):
             parser.error('n must be a non-zero integer')
         if args.max_simultaneous_tasks is not None and \
@@ -1139,6 +1219,11 @@ def main():
         patch_blocks(n=args.n,
                      max_simultaneous_tasks=args.max_simultaneous_tasks,
                      force=args.force)
+    if args.subcommand == 'blocks' and args.subsubcommand == 'stats':
+        block_stats(n=args.n,
+                    max_simultaneous_tasks=args.max_simultaneous_tasks,
+                    force=args.force)
+
     if args.subcommand == 'daligner' and args.subsubcommand == 'update':
         update_daligner_queue(n_tasks=args.n)
     if args.subcommand == 'daligner' and args.subsubcommand == 'stop':
