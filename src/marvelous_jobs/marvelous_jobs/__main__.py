@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+import collections
 import hashlib
 import os
 import queue
@@ -361,12 +362,62 @@ def cancel_daligner_reservation():
     slurm_utils.cancel_jobs(reserved_jobids)
 
 def list_blocks():
+    print('Fetching block information...')
     config = mc()
     db = get_database()
 
+    directory = config.get('general', 'directory')
+    stat_directory = os.path.join(directory, 'stats')
+    project = db.get_project_name()
     blocks = db.get_blocks()
+    completed_blocks = db.get_completed_blocks()
 
-    print('\n'.join(map(str, blocks)))
+    block_stats = {}
+
+    def stage_completed(fname):
+        """Check if a certain marvel stage has completed.
+
+        This is done by checking if the file exists, has
+        a non-zero size, and was modified at least 5 minutes
+        ago. The last rule is to prevent classifying a stage
+        as completed if it is currently running.
+
+        Returns
+        -------
+        bool
+            True if the stage associated with `fname` has
+            finished, otherwise False.
+        """
+        if not os.path.exists(fname):
+            return False
+        s = os.stat(fname)
+        return s.st_size > 0 and (time.time() - s.st_mtime) > 60 * 5
+
+    for b in blocks:
+        block_file = os.path.join(directory, '{}.{}.las'.format(project, b))
+        q_file = os.path.join(directory, '.{}.{}.q.a2'.format(project, b))
+        trim_file = os.path.join(directory, '.{}.{}.trim.a2'.format(project, b))
+        stat_file = os.path.join(stat_directory,
+                                 '{}.{}.stats.txt'.format(project, b))
+        block_stats[b] = {
+            'aligned': b in completed_blocks,
+            'merged': stage_completed(block_file),
+            'quality_annotated': stage_completed(q_file),
+            'trim_annotated': stage_completed(trim_file),
+            'stats': stage_completed(stat_file)
+        }
+
+    stat_summary = collections.defaultdict(int)
+    for b, stats in block_stats.items():
+        stat_summary['Aligned'] += int(stats['aligned'])
+        stat_summary['Merged'] += int(stats['merged'])
+        stat_summary['Quality annotated'] += int(stats['quality_annotated'])
+        stat_summary['Trim annotated'] += int(stats['trim_annotated'])
+        stat_summary['Stats generated'] += int(stats['stats'])
+
+    widest = max(map(len, stat_summary.keys()))
+    for k, v in stat_summary.items():
+        print('{:>{widest}}: {:5d}'.format(k, v, widest=widest))
 
 def list_completed_blocks():
     config = mc()
@@ -990,7 +1041,7 @@ def parse_args():
     # blocks
     block_parser = subparsers.add_parser('blocks', help='List block '
                                          'information')
-    block_parser.add_argument('--complete', help='list completed blocks',
+    block_parser.add_argument('-l', '--list', help='list completed blocks',
                               action='store_true')
 
     block_subparsers = block_parser.add_subparsers(dest='subsubcommand',
@@ -1204,7 +1255,7 @@ def main():
                        max_simultaneous_tasks=args.max_simultaneous_tasks,
                        comparisons_per_job=args.comparisons_per_job)
     if args.subcommand == 'blocks' and args.subsubcommand is None:
-        if args.complete:
+        if args.list:
             list_completed_blocks()
         else:
             list_blocks()
