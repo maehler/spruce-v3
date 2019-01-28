@@ -616,7 +616,7 @@ class stats_job_array(marvel_job):
                  reservation_token=None,
                  run_directory=None,
                  account=None,
-                 timelimit='2:00:00'):
+                 timelimit='5:00:00'):
 
         jobname = 'stats'
 
