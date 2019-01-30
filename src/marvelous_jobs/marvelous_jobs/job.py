@@ -385,7 +385,7 @@ class merge_job_array(marvel_job):
                  max_simultaneous_tasks=None, script_directory=None,
                  log_directory=None, reservation_token=None,
                  run_directory=None, account=None,
-                 timelimit='8:00:00', verbose=True):
+                 timelimit='12:00:00', verbose=True):
         jobname = 'las_merge'
 
         if reservation_token is None:
@@ -427,7 +427,7 @@ class merge_job_array(marvel_job):
              .format(run_directory)],
             ['echo', '"Using reservation in $reservation_filename"'],
             ['block=$(cat ${reservation_filename})'],
-            ['echo', '"Merging block ${block}"'],
+            ['echo', '"Merging block ${block} in job ${SLURM_JOB_ID} (array ${SLURM_ARRAY_JOB_ID})"'],
             ['db="{}"'.format(project)],
             [],
             ['LAmerge',
@@ -463,7 +463,7 @@ class annotate_job_array(marvel_job):
                  max_simultaneous_tasks=None, script_directory=None,
                  log_directory=None, reservation_token=None,
                  run_directory=None, account=None,
-                 timelimit='5:00:00'):
+                 timelimit='12:00:00'):
         jobname = 'annotation'
 
         if reservation_token is None:
@@ -505,7 +505,7 @@ class annotate_job_array(marvel_job):
              .format(run_directory)],
             ['echo', '"Using reservation in $reservation_filename"'],
             ['block=$(cat ${reservation_filename})'],
-            ['echo', '"Merging block ${block}"'],
+            ['echo', '"Annotating block ${block}"'],
             ['db="{}"'.format(project)],
             [],
             ['LAq',
@@ -521,7 +521,7 @@ class annotate_job_array(marvel_job):
                          timelimit=timelimit,
                          account=account,
                          array=self.array_indices,
-                         cores=1)
+                         cores=2)
 
     def start(self, dryrun=False, force_write=False):
         return super().start(dryrun, force_write, self.reservation_token)
@@ -616,7 +616,7 @@ class stats_job_array(marvel_job):
                  reservation_token=None,
                  run_directory=None,
                  account=None,
-                 timelimit='5:00:00'):
+                 timelimit='12:00:00'):
 
         jobname = 'stats'
 
