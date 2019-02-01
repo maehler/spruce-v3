@@ -463,7 +463,7 @@ class annotate_job_array(marvel_job):
                  max_simultaneous_tasks=None, script_directory=None,
                  log_directory=None, reservation_token=None,
                  run_directory=None, account=None,
-                 timelimit='12:00:00'):
+                 timelimit='1-00:00:00'):
         jobname = 'annotation'
 
         if reservation_token is None:
@@ -616,7 +616,7 @@ class stats_job_array(marvel_job):
                  reservation_token=None,
                  run_directory=None,
                  account=None,
-                 timelimit='12:00:00'):
+                 timelimit='1-00:00:00'):
 
         jobname = 'stats'
 
