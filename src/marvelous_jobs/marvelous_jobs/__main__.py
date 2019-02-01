@@ -17,6 +17,7 @@ from marvelous_jobs import marvelous_config as mc
 from marvelous_jobs import daligner_job_array
 from marvelous_jobs import masking_server_job
 from marvelous_jobs import prepare_job
+from marvelous_jobs import check_job
 from marvelous_jobs import merge_job_array
 from marvelous_jobs import annotate_job_array
 from marvelous_jobs import patch_job_array
@@ -426,6 +427,36 @@ def list_completed_blocks():
     blocks = db.get_completed_blocks()
 
     print('\n'.join(map(str, blocks)))
+
+def check_block(block, run):
+    config = mc()
+    db = get_database()
+
+    directory = config.get('general', 'directory')
+    project = db.get_project_name()
+    n_blocks = db.get_n_blocks()
+
+    if block > n_blocks:
+        print('error: invalid block: {}'.format(block))
+        sys.exit(1)
+
+    block_directory = os.path.join(directory,
+                                   'd{:03d}_{:05d}'.format(run, block))
+    print('checking block {}'.format(block))
+    if not os.path.isdir(block_directory):
+        print('error: directory not found: {}'.format(block_directory))
+        sys.exit(1)
+
+    job = check_job(block=block,
+                    run=run,
+                    project=project,
+                    script_directory=config.get('general', 'script_directory'),
+                    log_directory=config.get('general', 'log_directory'),
+                    account=config.get('general', 'account'))
+
+    jobid = job.start()
+
+    print('Job {} submitted'.format(jobid))
 
 def merge_blocks(n, n_files, max_simultaneous_tasks=None):
     config = mc()
@@ -1047,6 +1078,18 @@ def parse_args():
     block_subparsers = block_parser.add_subparsers(dest='subsubcommand',
                                                    metavar='block-command')
 
+    # blocks check
+    block_check = block_subparsers.add_parser('check',
+                                              help='check LAS file '
+                                              'integrity',
+                                              description='check the '
+                                              'integrity of all LAS files '
+                                              'that make up a block.')
+    block_check.add_argument('block', help='the block to check',
+                             type=int)
+    block_check.add_argument('-r', '--run', help='run identifier (default: 1)',
+                             type=int, default=1)
+
     # blocks merge
     block_merge = block_subparsers.add_parser('merge', help='merge blocks',
         description='Validate and merge LAS files from a block into a single '
@@ -1204,7 +1247,7 @@ def parse_args():
                          'positive non-zero integer')
     if args.subcommand == 'daligner' and args.subsubcommand == 'update':
         if args.n is not None and not positive_integer(args.n):
-            parser.error('n must be a non-zero integer')
+            parser.error('n must be a positive non-zero integer')
 
     if args.subcommand == 'blocks' and (args.subsubcommand == 'merge' \
                                         or args.subsubcommand == 'annotate' \
@@ -1214,10 +1257,15 @@ def parse_args():
             parser.error('n must be a non-zero integer')
         if args.max_simultaneous_tasks is not None and \
                 not positive_integer(args.max_simultaneous_tasks):
-            parser.error('max-simultaneous-tasks must be a non-zero integer')
+            parser.error('max-simultaneous-tasks must be a positive non-zero integer')
     if args.subcommand == 'blocks' and args.subsubcommand == 'merge':
         if not positive_integer(args.m):
-            parser.error('m must be a non-zero integer')
+            parser.error('m must be a positive non-zero integer')
+    if args.subcommand == 'blocks' and args.subsubcommand == 'check':
+        if not positive_integer(args.block):
+            parser.error('block must be a positive non-zero integer')
+        if not positive_integer(args.run):
+            parser.error('run must be a positive non-zero integer')
 
     if args.subcommand is None:
         parser.parse_args(['-h'])
@@ -1254,11 +1302,14 @@ def main():
                        no_masking=args.no_masking,
                        max_simultaneous_tasks=args.max_simultaneous_tasks,
                        comparisons_per_job=args.comparisons_per_job)
+
     if args.subcommand == 'blocks' and args.subsubcommand is None:
         if args.list:
             list_completed_blocks()
         else:
             list_blocks()
+    if args.subcommand == 'blocks' and args.subsubcommand == 'check':
+        check_block(block=args.block, run=args.run)
     if args.subcommand == 'blocks' and args.subsubcommand == 'merge':
         merge_blocks(n=args.n, n_files=args.m,
                      max_simultaneous_tasks=args.max_simultaneous_tasks)

@@ -678,3 +678,56 @@ class stats_job_array(marvel_job):
 
     def start(self, dryrun=False, force_write=False):
         return super().start(dryrun, force_write, self.reservation_token)
+
+class check_job(marvel_job):
+
+    filename = 'check_block.sh'
+
+    def __init__(self, block, run, project,
+                 script_directory=None,
+                 log_directory=None,
+                 account=None,
+                 timelimit='2:00:00'):
+
+        self.project = project
+        self.block = block
+        self.run = run
+
+        jobname = '{}_{}'.format(os.path.splitext(check_job.filename)[0],
+                                 self.block)
+
+        if script_directory is None:
+            self.filename = check_job.filename
+        else:
+            self.filename = os.path.join(script_directory, check_job.filename)
+
+        if log_directory is None:
+            logfile = '{}.log'.format(jobname)
+        else:
+            logfile = os.path.join(log_directory, '{}.log'.format(jobname))
+
+        args = [
+            ['project=$1'],
+            ['block=$2'],
+            ['run=$3'],
+            ['input_dir=$(printf "d%03d_%05d" ${run} ${block})'],
+            ['for f in $(find $input_dir -type f -name "*.las"); do'],
+            ['\tif ! LAcheck', '${project}', '${f}; then'],
+            ['\t\techo', '"${f} is corrupt"'],
+            ['\tfi'],
+            ['done']
+        ]
+
+        super().__init__(args,
+                         jobname,
+                         filename=self.filename,
+                         log_filename=logfile,
+                         account=account,
+                         timelimit=timelimit)
+
+    def start(self, dryrun=False, force_write=False):
+        return super().start(dryrun,
+                             force_write,
+                             self.project,
+                             self.block,
+                             self.run)

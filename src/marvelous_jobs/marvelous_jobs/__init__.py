@@ -3,6 +3,7 @@ import pkg_resources
 from marvelous_jobs.database import marvel_db
 from marvelous_jobs.config import marvelous_config
 from marvelous_jobs.job import daligner_job_array
+from marvelous_jobs.job import check_job
 from marvelous_jobs.job import merge_job_array
 from marvelous_jobs.job import annotate_job_array
 from marvelous_jobs.job import patch_job_array
