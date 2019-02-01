@@ -687,7 +687,8 @@ class check_job(marvel_job):
                  script_directory=None,
                  log_directory=None,
                  account=None,
-                 timelimit='2:00:00'):
+                 cores=16,
+                 timelimit='5:00:00'):
 
         self.project = project
         self.block = block
@@ -707,15 +708,19 @@ class check_job(marvel_job):
             logfile = os.path.join(log_directory, '{}.log'.format(jobname))
 
         args = [
+            ['module', 'load', 'gnuparallel/20180822'],
             ['project=$1'],
             ['block=$2'],
             ['run=$3'],
             ['input_dir=$(printf "d%03d_%05d" ${run} ${block})'],
-            ['for f in $(find $input_dir -type f -name "*.las"); do'],
-            ['\tif ! LAcheck', '${project}', '${f}; then'],
-            ['\t\techo', '"${f} is corrupt"'],
-            ['\tfi'],
-            ['done']
+            [],
+            ['check_las() {'],
+            ['\tLAcheck $1 $2 || true'],
+            ['}'],
+            ['export', '-f', 'check_las'],
+            [],
+            ['find ${input_dir} -type f -name "*.las" |',
+             'parallel -j {} check_las ${{project}} {{}}'.format(cores)]
         ]
 
         super().__init__(args,
@@ -723,7 +728,8 @@ class check_job(marvel_job):
                          filename=self.filename,
                          log_filename=logfile,
                          account=account,
-                         timelimit=timelimit)
+                         timelimit=timelimit,
+                         cores=cores)
 
     def start(self, dryrun=False, force_write=False):
         return super().start(dryrun,
