@@ -496,6 +496,11 @@ def merge_blocks(n, n_files, max_simultaneous_tasks=None):
         with open(reservation_file.format(task_id), 'w') as f:
             f.write('{}\n'.format(b))
 
+
+    if len(blocks_to_merge) == 0:
+        print('No blocks to merge')
+        return
+
     print('Reserved {} blocks'.format(len(blocks_to_merge)))
 
     merge_job = merge_job_array(blocks_to_merge,
