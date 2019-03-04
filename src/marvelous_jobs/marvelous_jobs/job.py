@@ -737,3 +737,36 @@ class check_job(marvel_job):
                              self.project,
                              self.block,
                              self.run)
+
+class annotation_merge_job(marvel_job):
+
+    filename = 'merge_annotations.sh'
+
+    def __init__(self, config):
+
+        script_directory = config.get('general', 'script_directory')
+        log_directory = config.get('general', 'log_directory')
+
+        self.jobname = os.path.splitext(annotation_merge_job.filename)[0]
+
+        if script_directory is None:
+            self.filename = annotation_merge_job.filename
+        else:
+            self.filename = os.path.join(script_directory,
+                                         annotation_merge_job.filename)
+        if log_directory is None:
+            logfile = '{}.log'.format(self.jobname)
+        else:
+            logfile = os.path.join(log_directory, '{}.log'.format(self.jobname))
+
+        args = [
+            ['TKmerge', config.get('general', 'name'), 'q'],
+            ['TKmerge', config.get('general', 'name'), 'trim']
+        ]
+
+        super().__init__(args,
+                         self.jobname,
+                         filename=self.filename,
+                         log_filename=logfile,
+                         account=config.get('general', 'account'),
+                         timelimit=config.get(self.jobname, 'timelimit'))

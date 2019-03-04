@@ -20,6 +20,7 @@ from marvelous_jobs import prepare_job
 from marvelous_jobs import check_job
 from marvelous_jobs import merge_job_array
 from marvelous_jobs import annotate_job_array
+from marvelous_jobs import annotation_merge_job
 from marvelous_jobs import patch_job_array
 from marvelous_jobs import stats_job_array
 from marvelous_jobs import slurm_utils
@@ -619,6 +620,36 @@ def annotate_blocks(n, max_simultaneous_tasks, force=False):
 
     print('Jobs submitted in job array {}'.format(jobid))
 
+def merge_annotations(timelimit=None):
+    config = mc()
+    db = get_database()
+
+    # Check that all annotation files exist
+    print('Looking for annotation files...')
+    project = config.get('general', 'name')
+    proj_dir = config.get('general', 'directory')
+    n_blocks = db.get_n_blocks()
+
+    for b in range(1, n_blocks + 1):
+        files = map(lambda x: x.format(project, b),
+                    ['.{}.{}.q.a2', '.{}.{}.q.d2',
+                     '.{}.{}.trim.a2', '.{}.{}.q.a2'])
+        for f in files:
+            if not os.path.isfile(os.path.join(proj_dir, f)) \
+               or os.stat(os.path.join(proj_dir, f)).st_size == 0:
+                print('error: not all annotation files exist, '
+                      'make sure to annotate all blocks',
+                      file=os.stderr)
+                exit(1)
+
+    config.update('merge_annotations', 'timelimit',
+                  timelimit, '1-00:00:00')
+
+    merge_job = annotation_merge_job(config)
+    jobid = merge_job.start()
+
+    print('Job submitted: {}'.format(jobid))
+
 def patch_blocks(n, max_simultaneous_tasks, force=False):
     config = mc()
     db = get_database()
@@ -1118,13 +1149,19 @@ def parse_args():
                                                  help='annotate blocks',
                                                  description='Create quality '
                                                  'and trim annotation tracks '
-                                                 'for a LAS file.')
-    block_annotate.add_argument('-n', help='maximum number of blocks to process '
+                                                 'for a LAS file.',
+                                                 parents=[general_args_parser])
+    block_annotate.add_argument('-n',
+                                help='maximum number of blocks to process '
                                 '(default: 1)', type=int, default=1)
-    block_annotate.add_argument('--max-simultaneous-tasks', help='maximum number '
-                                'of tasks allowed to run simultaneously '
-                                '(default: N)', type=int)
-    block_annotate.add_argument('-f', '--force', help='start annotation even if '
+    block_annotate.add_argument('--max-simultaneous-tasks',
+                                help='maximum number of tasks allowed to '
+                                'run simultaneously (default: N)',
+                                type=int)
+    block_annotate.add_argument('--merge', help='merge existing annotations '
+                                'into a single file', action='store_true')
+    block_annotate.add_argument('-f', '--force',
+                                help='start annotation even if '
                                 'annotation files already exist',
                                 action='store_true')
 
@@ -1328,9 +1365,12 @@ def main():
         merge_blocks(n=args.n, n_files=args.m,
                      max_simultaneous_tasks=args.max_simultaneous_tasks)
     if args.subcommand == 'blocks' and args.subsubcommand == 'annotate':
-        annotate_blocks(n=args.n,
-                        max_simultaneous_tasks=args.max_simultaneous_tasks,
-                        force=args.force)
+        if args.merge:
+            merge_annotations()
+        else:
+            annotate_blocks(n=args.n,
+                            max_simultaneous_tasks=args.max_simultaneous_tasks,
+                            force=args.force)
     if args.subcommand == 'blocks' and args.subsubcommand == 'patch':
         patch_blocks(n=args.n,
                      max_simultaneous_tasks=args.max_simultaneous_tasks,
