@@ -48,6 +48,7 @@ def init(name, coverage, account=None, directory='.', force=False,
 
     config = mc(cdict={
         'general': {
+            'name': name,
             'account': account,
             'database': db_name,
             'directory': os.path.abspath(directory),
