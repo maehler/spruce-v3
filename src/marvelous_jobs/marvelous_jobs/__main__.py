@@ -112,7 +112,8 @@ def prepare(fasta, blocksize, script_directory, log_directory, force=False):
     db.update_prepare_job_id(jobid)
 
 def start_daligner(jobs_per_task=100, max_simultaneous_tasks=None,
-                   force=False, no_masking=False, comparisons_per_job=1):
+                   force=False, no_masking=False, comparisons_per_job=1,
+                   threads=None, timelimit=None):
     config = mc()
     db = get_database()
     update_statuses()
@@ -148,9 +149,11 @@ def start_daligner(jobs_per_task=100, max_simultaneous_tasks=None,
                   .format(db.prepare_status()), file=sys.stderr)
         exit(1)
 
-    config.set('daligner', 'jobs_per_task', jobs_per_task)
-    config.set('daligner', 'max_simultaneous_tasks', max_simultaneous_tasks)
-    config.set('daligner', 'comparisons_per_job', comparisons_per_job)
+    config.update('daligner', 'threads', threads)
+    config.update('daligner', 'timelimit', timelimit)
+    config.update('daligner', 'jobs_per_task', jobs_per_task)
+    config.update('daligner', 'max_simultaneous_tasks', max_simultaneous_tasks)
+    config.update('daligner', 'comparisons_per_job', comparisons_per_job)
 
     projname = db.get_project_name()
 
@@ -1161,11 +1164,12 @@ def parse_args():
     dalign_subparsers.required = True
 
     # daligner start
-    dalign_start = dalign_subparsers.add_parser('start', help='initialise '
-                                                'daligner jobs',
+    dalign_start = dalign_subparsers.add_parser(
+        'start', help='initialise daligner jobs',
         description='Initialise daligner jobs by populating the database '
                     'with the blocks and the individual jobs that will be '
-                    'run.')
+                    'run.',
+        parents=[general_args_parser])
     dalign_start.add_argument('-n', '--jobs-per-task', help='number of jobs '
                               'that each task in a job array will run',
                               type=int, default=100)
@@ -1304,10 +1308,13 @@ def main():
     if args.subcommand == 'mask' and args.subsubcommand == 'stop':
         stop_mask()
     if args.subcommand == 'daligner' and args.subsubcommand == 'start':
-        start_daligner(jobs_per_task=args.jobs_per_task, force=args.force,
+        start_daligner(jobs_per_task=args.jobs_per_task,
+                       force=args.force,
                        no_masking=args.no_masking,
                        max_simultaneous_tasks=args.max_simultaneous_tasks,
-                       comparisons_per_job=args.comparisons_per_job)
+                       comparisons_per_job=args.comparisons_per_job,
+                       threads=args.threads,
+                       timelimit=args.timelimit)
 
     if args.subcommand == 'blocks' and args.subsubcommand is None:
         if args.list:
