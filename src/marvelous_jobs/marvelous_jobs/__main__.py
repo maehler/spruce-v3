@@ -786,30 +786,13 @@ def start_mask(threads=None, port=None, constraint=None, cluster=None):
     db.update_masking_job_status()
     masking_status = db.masking_status()
 
-    if threads is None and config.get('DMserver', 'threads') is None:
-        config.set('DMserver', 'threads', 4)
-    elif threads is not None:
-        config.set('DMserver', 'threads', threads)
-
-    if port is None and config.get('DMserver', 'port') is None:
-        config.set('DMserver', 'port', 12345)
-    elif port is not None:
-        config.set('DMserver', 'port', port)
-
-    if constraint is None and config.get('DMserver', 'constraint') is None:
-        config.set('DMserver', 'constraint', None)
-    elif constraint is not None:
-        config.set('DMserver', 'constraint', constraint)
-
-    if cluster is None and config.get('DMserver', 'cluster') is None:
-        config.set('DMserver', 'cluster', None)
-    elif cluster is not None:
-        config.set('DMserver', 'cluster', cluster)
-
-    if config.get('DMserver', 'checkpoint_file') is None:
-        config.set('DMserver', 'checkpoint_file',
-                   os.path.join(config.get('general', 'directory'),
-                                'masking_checkpoint'))
+    config.update('DMserver', 'threads', threads, 4)
+    config.update('DMserver', 'port', port, 12345)
+    config.update('DMserver', 'constraint', constraint)
+    config.update('DMserver', 'cluster', cluster)
+    config.update('DMserver', 'checkpoint_file',
+                  os.path.join(config.get('general', 'directory'),
+                               'masking_checkpoint'))
 
     if masking_status is not None \
        and masking_status[1] in (slurm_utils.status.running,
