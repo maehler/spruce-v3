@@ -998,6 +998,16 @@ def parse_args():
     parser.add_argument('--version', action='version',
                         version='%(prog)s v{0}'.format(__version__))
 
+    # General arguments that are used by some of the subcommands
+    general_args_parser = argparse.ArgumentParser(add_help=False)
+    general_args = general_args_parser.add_argument_group(
+        'general arguments', 'SLURM arguments that are added to the '
+        'config file, where applicable.')
+    general_args.add_argument('--timelimit', help='time limit of the '
+                              'SLURM job', metavar='TIME')
+    general_args.add_argument('--threads', help='number of cores to '
+                              'use (default: 1)', default=1, type=int)
+
     subparsers = parser.add_subparsers(dest='subcommand',
                                        metavar='sub-command')
     subparsers.required = True
@@ -1055,18 +1065,17 @@ def parse_args():
     mask_subparsers.required = True
 
     # Masking server status
-    mask_status = mask_subparsers.add_parser('status', help='masking server '
-                                             'status',
-        description='Show the status of the masking server.')
+    mask_status = mask_subparsers.add_parser(
+        'status', help='masking server status',
+        description='Show the status of the masking server.',
+        parents=[general_args_parser])
 
     # Start masking server
     mask_start = mask_subparsers.add_parser('start', help='start masking server',
                                             description='Start the masking '
-                                            'server.')
+                                            'server.',
+                                            parents=[general_args_parser])
     mask_start.add_argument('-C', '--constraint', help='node constraint')
-    mask_start.add_argument('-t', '--threads', help='number of worker threads '
-                            '(default: 4)',
-                            type=int)
     mask_start.add_argument('-p', '--port', help='port to listen to (default: '
                             '12345)', type=int)
 
