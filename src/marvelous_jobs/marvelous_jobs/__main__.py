@@ -113,7 +113,8 @@ def prepare(fasta, blocksize, script_directory, log_directory, force=False):
     db.update_prepare_job_id(jobid)
 
 def start_daligner(jobs_per_task=100, max_simultaneous_tasks=None,
-                   force=False, no_masking=False, comparisons_per_job=1):
+                   force=False, no_masking=False, comparisons_per_job=1,
+                   threads=None, timelimit=None):
     config = mc()
     db = get_database()
     update_statuses()
@@ -127,7 +128,8 @@ def start_daligner(jobs_per_task=100, max_simultaneous_tasks=None,
     if jobs_per_task > config.getint('general', 'max_number_of_jobs'):
         print('error: number of jobs per task ({0}) cannot be more than the '
               'maximum number of jobs ({1})' \
-              .format(jobs_per_task, config.get('general', 'max_number_of_jobs')))
+              .format(jobs_per_task,
+                      config.get('general', 'max_number_of_jobs')))
         sys.exit(1)
 
     if not no_masking and \
@@ -148,9 +150,11 @@ def start_daligner(jobs_per_task=100, max_simultaneous_tasks=None,
                   .format(db.prepare_status()), file=sys.stderr)
         exit(1)
 
-    config.set('daligner', 'jobs_per_task', jobs_per_task)
-    config.set('daligner', 'max_simultaneous_tasks', max_simultaneous_tasks)
-    config.set('daligner', 'comparisons_per_job', comparisons_per_job)
+    config.update('daligner', 'threads', threads)
+    config.update('daligner', 'timelimit', timelimit)
+    config.update('daligner', 'jobs_per_task', jobs_per_task)
+    config.update('daligner', 'max_simultaneous_tasks', max_simultaneous_tasks)
+    config.update('daligner', 'comparisons_per_job', comparisons_per_job)
 
     projname = db.get_project_name()
 
@@ -166,8 +170,9 @@ def start_daligner(jobs_per_task=100, max_simultaneous_tasks=None,
         db.remove_blocks()
         stop_daligner()
         db.remove_daligner_jobs()
-        daligner_script = os.path.join(config.get('general', 'script_directory'),
-                                       daligner_job_array.filename)
+        daligner_script = os.path.join(
+            config.get('general', 'script_directory'),
+            daligner_job_array.filename)
         if os.path.exists(daligner_script):
             os.remove(daligner_script)
 
@@ -184,14 +189,16 @@ def start_daligner(jobs_per_task=100, max_simultaneous_tasks=None,
         try:
             db.add_block(i, block_name)
         except RuntimeError as rte:
-            print('error: {0}, use --force to override'.format(rte), file=sys.stderr)
+            print('error: {0}, use --force to override'.format(rte),
+                  file=sys.stderr)
             exit(1)
         current_job += 1
         jobchunk.append((current_job, i, i, 1, not no_masking))
         if current_job % n_jobs == 0:
             db.add_daligner_jobs(jobchunk)
             jobchunk = []
-            print('\rAdding daligner jobs to database: {0}/{1}'.format(current_job, total_n_jobs), end='')
+            print('\rAdding daligner jobs to database: {0}/{1}' \
+                  .format(current_job, total_n_jobs), end='')
 
     for i in range(1, n_blocks + 1):
         for j in range(i + 1, n_blocks + 1):
@@ -200,24 +207,28 @@ def start_daligner(jobs_per_task=100, max_simultaneous_tasks=None,
             if current_job % n_jobs == 0:
                 db.add_daligner_jobs(jobchunk)
                 jobchunk = []
-                print('\rAdding daligner jobs to database: {0}/{1}'.format(current_job, total_n_jobs), end='')
+                print('\rAdding daligner jobs to database: {0}/{1}' \
+                      .format(current_job, total_n_jobs), end='')
 
     if len(jobchunk) > 0:
         db.add_daligner_jobs(jobchunk)
-        print('\rAdding daligner jobs to database: {0}/{1}'.format(current_job, total_n_jobs), end='')
+        print('\rAdding daligner jobs to database: {0}/{1}' \
+              .format(current_job, total_n_jobs), end='')
 
     print()
 
 def get_daligner_array(ntasks, config, db, masking_jobid=None):
     # Reserve jobs
-    reservation_token = hashlib.md5(str(time.time()).encode('utf-8')).hexdigest()
+    reservation_token = hashlib.md5(
+        str(time.time()).encode('utf-8')).hexdigest()
     n_jobs = 0
     rowids = []
     for i in range(1, ntasks + 1):
-        reservation = db.reserve_daligner_jobs(token='{0}_{1}'.format(reservation_token, i),
-                                               max_jobs=config.getint('daligner', 'jobs_per_task'),
-                                               comparisons_per_job=config.getint('daligner',
-                                                                                 'comparisons_per_job'))
+        reservation = db.reserve_daligner_jobs(
+            token='{0}_{1}'.format(reservation_token, i),
+            max_jobs=config.getint('daligner', 'jobs_per_task'),
+            comparisons_per_job=config.getint(
+                'daligner', 'comparisons_per_job'))
         reservation_filename = os.path.join(
             config.get('daligner', 'run_directory'),
             'daligner_task_{0}_{1}.txt'.format(reservation_token, i))
@@ -228,41 +239,35 @@ def get_daligner_array(ntasks, config, db, masking_jobid=None):
                 f.write('\t'.join(map(str, [d['source_block']] + \
                                             d['rowids'] + \
                                             d['target_blocks'])) + '\n')
-    job_array = daligner_job_array(ntasks,
-                                   config.get('general', 'database'),
-                                   reservation_token = reservation_token,
-                                   run_directory = config.get('daligner',
-                                                              'run_directory'),
-                                   script_directory=config.get('general',
-                                                               'script_directory'),
-                                   log_directory=config.get('general',
-                                                            'log_directory'),
-                                   jobs_per_task=config.get('daligner',
-                                                            'jobs_per_task'),
-                                   max_simultaneous_tasks=config.getint('daligner',
-                                                                        'max_simultaneous_tasks'),
-                                   masking_jobid=masking_jobid,
-                                   masking_port=config.getint('DMserver',
-                                                              'port'),
-                                   account=config.get('general', 'account'),
-                                   timelimit=config.get('daligner',
-                                                        'timelimit'),
-                                   verbose=config.getboolean('daligner',
-                                                             'verbose'),
-                                   identity=config.getboolean('daligner',
-                                                              'identity'),
-                                   tuple_suppression_frequency=config.getint('daligner',
-                                                                             'tuple_suppression_frequency'),
-                                   correlation_rate=config.getfloat('daligner',
-                                                                    'correlation_rate'),
-                                   threads=config.getint('daligner', 'threads'))
+                job_array = daligner_job_array(
+                    ntasks,
+                    config.get('general', 'database'),
+                    reservation_token = reservation_token,
+                    run_directory = config.get('daligner', 'run_directory'),
+                    script_directory=config.get('general', 'script_directory'),
+                    log_directory=config.get('general', 'log_directory'),
+                    jobs_per_task=config.get('daligner', 'jobs_per_task'),
+                    max_simultaneous_tasks=config.getint(
+                        'daligner', 'max_simultaneous_tasks'),
+                    masking_jobid=masking_jobid,
+                    masking_port=config.getint('DMserver', 'port'),
+                    account=config.get('general', 'account'),
+                    timelimit=config.get('daligner', 'timelimit'),
+                    verbose=config.getboolean('daligner', 'verbose'),
+                    identity=config.getboolean('daligner', 'identity'),
+                    tuple_suppression_frequency=config.getint(
+                        'daligner', 'tuple_suppression_frequency'),
+                    correlation_rate=config.getfloat(
+                        'daligner', 'correlation_rate'),
+                    threads=config.getint('daligner', 'threads'))
 
     return job_array, n_jobs, rowids
 
 def submit_daligner_jobs(ntasks, config, db, masking_jobid=None):
     if ntasks == 0:
         return
-    job_array, n_jobs, rowids = get_daligner_array(ntasks, config, db, masking_jobid)
+    job_array, n_jobs, rowids = get_daligner_array(
+        ntasks, config, db, masking_jobid)
     return job_array.start(), n_jobs, rowids
 
 def backup_database():
@@ -320,7 +325,8 @@ def update_daligner_queue(n_tasks):
     print('Queueing jobs...')
 
     try:
-        jobid, n_jobs, rowids = submit_daligner_jobs(tasks_to_queue, config, db, db.get_masking_jobid())
+        jobid, n_jobs, rowids = submit_daligner_jobs(
+            tasks_to_queue, config, db, db.get_masking_jobid())
         db.set_daligner_jobids(rowids, jobid)
     except RuntimeError as rte:
         print('error: job submission failed\n{0}'.format(rte), file=sys.stderr)
@@ -398,7 +404,8 @@ def list_blocks():
     for b in blocks:
         block_file = os.path.join(directory, '{}.{}.las'.format(project, b))
         q_file = os.path.join(directory, '.{}.{}.q.a2'.format(project, b))
-        trim_file = os.path.join(directory, '.{}.{}.trim.a2'.format(project, b))
+        trim_file = os.path.join(directory,
+                                 '.{}.{}.trim.a2'.format(project, b))
         stat_file = os.path.join(stat_directory,
                                  '{}.{}.stats.txt'.format(project, b))
         block_stats[b] = {
@@ -508,8 +515,8 @@ def merge_blocks(n, n_files, max_simultaneous_tasks=None):
                                 project,
                                 n_files=n_files,
                                 max_simultaneous_tasks=max_simultaneous_tasks,
-                                script_directory=config.get('general',
-                                                            'script_directory'),
+                                script_directory=config.get(
+                                    'general', 'script_directory'),
                                 log_directory=config.get('general',
                                                          'log_directory'),
                                 reservation_token=reservation_token,
@@ -624,7 +631,8 @@ def patch_blocks(n, max_simultaneous_tasks, force=False):
               for x in ['a', 'd']]
     trim_files = [os.path.join(directory, '{}.trim.{}2'.format(project, x)) \
                   for x in ['a', 'd']]
-    block_annot_file = os.path.join(directory, '.{}.{{}}.{{}}.{{}}2'.format(project))
+    block_annot_file = os.path.join(
+        directory, '.{}.{{}}.{{}}.{{}}2'.format(project))
     if not all(os.path.exists(x) for x in q_files) \
        or not all(os.path.exists(y) for y in trim_files):
         print('Merged annotation files not found, '
@@ -660,7 +668,6 @@ def patch_blocks(n, max_simultaneous_tasks, force=False):
                                     'patch_task_{}_{{}}.txt' \
                                     .format(reservation_token))
 
-    #fasta_file = os.path.join(directory, '{}.{{}}.fixed.fasta'.format(project))
     q_file = os.path.join(directory, '.{}.{{}}.q.a2'.format(project))
 
     print('Reserving maximum {} blocks...'.format(n))
@@ -787,30 +794,13 @@ def start_mask(threads=None, port=None, constraint=None, cluster=None):
     db.update_masking_job_status()
     masking_status = db.masking_status()
 
-    if threads is None and config.get('DMserver', 'threads') is None:
-        config.set('DMserver', 'threads', 4)
-    elif threads is not None:
-        config.set('DMserver', 'threads', threads)
-
-    if port is None and config.get('DMserver', 'port') is None:
-        config.set('DMserver', 'port', 12345)
-    elif port is not None:
-        config.set('DMserver', 'port', port)
-
-    if constraint is None and config.get('DMserver', 'constraint') is None:
-        config.set('DMserver', 'constraint', None)
-    elif constraint is not None:
-        config.set('DMserver', 'constraint', constraint)
-
-    if cluster is None and config.get('DMserver', 'cluster') is None:
-        config.set('DMserver', 'cluster', None)
-    elif cluster is not None:
-        config.set('DMserver', 'cluster', cluster)
-
-    if config.get('DMserver', 'checkpoint_file') is None:
-        config.set('DMserver', 'checkpoint_file',
-                   os.path.join(config.get('general', 'directory'),
-                                'masking_checkpoint'))
+    config.update('DMserver', 'threads', threads, 4)
+    config.update('DMserver', 'port', port, 12345)
+    config.update('DMserver', 'constraint', constraint)
+    config.update('DMserver', 'cluster', cluster)
+    config.update('DMserver', 'checkpoint_file',
+                  os.path.join(config.get('general', 'directory'),
+                               'masking_checkpoint'))
 
     if masking_status is not None \
        and masking_status[1] in (slurm_utils.status.running,
@@ -999,12 +989,23 @@ def parse_args():
     parser.add_argument('--version', action='version',
                         version='%(prog)s v{0}'.format(__version__))
 
+    # General arguments that are used by some of the subcommands
+    general_args_parser = argparse.ArgumentParser(add_help=False)
+    general_args = general_args_parser.add_argument_group(
+        'general arguments', 'SLURM arguments that are added to the '
+        'config file, where applicable.')
+    general_args.add_argument('--timelimit', help='time limit of the '
+                              'SLURM job', metavar='TIME')
+    general_args.add_argument('--threads', help='number of cores to '
+                              'use (default: 1)', default=1, type=int)
+
     subparsers = parser.add_subparsers(dest='subcommand',
                                        metavar='sub-command')
     subparsers.required = True
 
     # Initialisation
-    init_parser = subparsers.add_parser('init', help='Initialise a new project',
+    init_parser = subparsers.add_parser('init',
+                                        help='Initialise a new project',
         description='Initialise a new MARVEL project.')
     init_parser.add_argument('name', help='name of the project')
     init_parser.add_argument('-A', '--account', help='SLURM account where '
@@ -1036,16 +1037,18 @@ def parse_args():
                     'blocks and converting it to an appropriate format.')
     prep_parser.add_argument('fasta', help='input reads in FASTA format')
     prep_parser.add_argument('-s', '--blocksize',
-                             help='database block size in megabases (default: 200)',
+                             help='database block size in megabases '
+                             '(default: 200)',
                              default=200, type=int, metavar='N',
                              dest='blocksize')
     prep_parser.add_argument('-f', '--force', help='force prepare',
                              action='store_true')
-    prep_parser.add_argument('-d', '--script-directory', help='directory where to '
+    prep_parser.add_argument('-d', '--script-directory',
+                             help='directory where to '
                              'store scripts (default: scripts)',
                              default=os.path.join('.', 'scripts'))
-    prep_parser.add_argument('-l', '--log-directory', help='directory where to '
-                             'store log files (default: logs)',
+    prep_parser.add_argument('-l', '--log-directory', help='directory where '
+                             'to store log files (default: logs)',
                              default=os.path.join('.', 'logs'))
 
     # Masking server
@@ -1056,24 +1059,25 @@ def parse_args():
     mask_subparsers.required = True
 
     # Masking server status
-    mask_status = mask_subparsers.add_parser('status', help='masking server '
-                                             'status',
-        description='Show the status of the masking server.')
+    mask_status = mask_subparsers.add_parser(
+        'status', help='masking server status',
+        description='Show the status of the masking server.',
+        parents=[general_args_parser])
 
     # Start masking server
-    mask_start = mask_subparsers.add_parser('start', help='start masking server',
+    mask_start = mask_subparsers.add_parser('start',
+                                            help='start masking server',
                                             description='Start the masking '
-                                            'server.')
+                                            'server.',
+                                            parents=[general_args_parser])
     mask_start.add_argument('-C', '--constraint', help='node constraint')
-    mask_start.add_argument('-t', '--threads', help='number of worker threads '
-                            '(default: 4)',
-                            type=int)
     mask_start.add_argument('-p', '--port', help='port to listen to (default: '
                             '12345)', type=int)
 
     # Stop masking server
     mask_stop = mask_subparsers.add_parser('stop', help='stop masking server',
-                                           description='Stop the masking server.')
+                                           description='Stop the masking '
+                                           'server.')
 
     # blocks
     block_parser = subparsers.add_parser('blocks', help='List block '
@@ -1156,16 +1160,17 @@ def parse_args():
     # daligner
     dalign_parser = subparsers.add_parser('daligner', help='Run daligner',
         description='Manage daligner jobs.')
-    dalign_subparsers = dalign_parser.add_subparsers(dest='subsubcommand',
-                                                     metavar='daligner-command')
+    dalign_subparsers = dalign_parser.add_subparsers(
+        dest='subsubcommand', metavar='daligner-command')
     dalign_subparsers.required = True
 
     # daligner start
-    dalign_start = dalign_subparsers.add_parser('start', help='initialise '
-                                                'daligner jobs',
+    dalign_start = dalign_subparsers.add_parser(
+        'start', help='initialise daligner jobs',
         description='Initialise daligner jobs by populating the database '
                     'with the blocks and the individual jobs that will be '
-                    'run.')
+                    'run.',
+        parents=[general_args_parser])
     dalign_start.add_argument('-n', '--jobs-per-task', help='number of jobs '
                               'that each task in a job array will run',
                               type=int, default=100)
@@ -1183,38 +1188,36 @@ def parse_args():
                               'server', action='store_true')
 
     # daligner update
-    dalign_update = dalign_subparsers.add_parser('update', help='submit '
-                                                 'daligner jobs',
+    dalign_update = dalign_subparsers.add_parser(
+        'update', help='submit daligner jobs',
         description='Queue a new set of daligner jobs. The number of jobs '
-                    'that actually will be queued depends on the maximum number of '
-                    'jobs that are allowed according to the config.ini file')
+        'that actually will be queued depends on the maximum number of '
+        'jobs that are allowed according to the config.ini file')
     dalign_update.add_argument('-n', help='size of job array to queue',
                                type=int)
 
     # daligner stop
-    dalign_stop = dalign_subparsers.add_parser('stop', help='stop daligner jobs',
-        description='Stop all currently queued, reserved, and running daligner '
-                    'jobs.')
+    dalign_stop = dalign_subparsers.add_parser(
+        'stop', help='stop daligner jobs',
+        description='Stop all currently queued, reserved, and running '
+        'daligner jobs.')
 
     # daligner list
-    dalign_reserve = dalign_subparsers.add_parser('reservation',
-                                                  help='manage '
-                                                  'daligner job reservations',
+    dalign_reserve = dalign_subparsers.add_parser(
+        'reservation', help='manage daligner job reservations',
         description='List all current daligner reservations. '
-                    'Prints the IDs of block 1, block 2, and the SLURM job id.')
+        'Prints the IDs of block 1, block 2, and the SLURM job id.')
     dalign_reserve.add_argument('--cancel', help='cancel all active '
                                 'reservations', action='store_true')
 
     # Update status and restart jobs if necessary
-    fix_parser = subparsers.add_parser('fix', help='Update and reset jobs',
-                                       description='If jobs have failed or '
-                                       'been cancelled, this function resets '
-                                       'them to have a status of NOSTARTED '
-                                       'so that they will be eligible for '
-                                       'running when running `marvelous_jobs '
-                                       'update`. Also, if for some reason '
-                                       'the masking server has stopped, it will '
-                                       'be restarted.')
+    fix_parser = subparsers.add_parser(
+        'fix', help='Update and reset jobs',
+        description='If jobs have failed or been cancelled, this '
+        'function resets them to have a status of NOSTARTED so that '
+        'they will be eligible for running when running `marvelous_jobs '
+        'update`. Also, if for some reason the masking server has '
+        'stopped, it will be restarted.')
 
     args = parser.parse_args()
 
@@ -1234,7 +1237,8 @@ def parse_args():
 
     if args.subcommand == 'mask' and args.subsubcommand == 'start':
         if args.threads is not None and not positive_integer(args.threads):
-            parser.error('number of threads must be a positive non-zero integer')
+            parser.error('number of threads must be a positive '
+                         'non-zero integer')
         if args.port is not None and not positive_integer(args.port):
             parser.error('port must be a positive non-zero integer')
             parser.error('{0} is not a valid node'.format(args.node))
@@ -1263,7 +1267,8 @@ def parse_args():
             parser.error('n must be a non-zero integer')
         if args.max_simultaneous_tasks is not None and \
                 not positive_integer(args.max_simultaneous_tasks):
-            parser.error('max-simultaneous-tasks must be a positive non-zero integer')
+            parser.error('max-simultaneous-tasks must be a positive '
+                         'non-zero integer')
     if args.subcommand == 'blocks' and args.subsubcommand == 'merge':
         if not positive_integer(args.m):
             parser.error('m must be a positive non-zero integer')
@@ -1304,10 +1309,13 @@ def main():
     if args.subcommand == 'mask' and args.subsubcommand == 'stop':
         stop_mask()
     if args.subcommand == 'daligner' and args.subsubcommand == 'start':
-        start_daligner(jobs_per_task=args.jobs_per_task, force=args.force,
+        start_daligner(jobs_per_task=args.jobs_per_task,
+                       force=args.force,
                        no_masking=args.no_masking,
                        max_simultaneous_tasks=args.max_simultaneous_tasks,
-                       comparisons_per_job=args.comparisons_per_job)
+                       comparisons_per_job=args.comparisons_per_job,
+                       threads=args.threads,
+                       timelimit=args.timelimit)
 
     if args.subcommand == 'blocks' and args.subsubcommand is None:
         if args.list:
