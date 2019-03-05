@@ -77,6 +77,9 @@ class marvelous_config:
         it means the key already has a value and that `value`
         is `None`, and nothing will changed.
 
+        Note that if the section and/or key does not exist,
+        it will be created with an inital value of `None`.
+
         Parameters
         ----------
         section : str
@@ -90,6 +93,10 @@ class marvelous_config:
             The value to set if `value` is `None`. This object
             is saved as `str(value)`.
         """
+        if not self.config.has_section(section):
+            self.config.add_section(section)
+        if not self.config.has_option(section, key):
+            self.set(section, key, None)
         if value is None and self.get(section, key) is None:
             self.set(section, key, default)
         elif value is not None:
