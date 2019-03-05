@@ -650,7 +650,12 @@ def merge_annotations(timelimit=None):
 
     print('Job submitted: {}'.format(jobid))
 
-def patch_blocks(n, max_simultaneous_tasks, force=False):
+def patch_blocks(n,
+                 max_simultaneous_tasks=None,
+                 trim=False,
+                 min_read_length=None,
+                 force=False,
+                 timelimit=None):
     config = mc()
     db = get_database()
 
@@ -658,9 +663,9 @@ def patch_blocks(n, max_simultaneous_tasks, force=False):
     directory = config.get('general', 'directory')
 
     # Check if the merged annotation files are available
-    q_files = [os.path.join(directory, '{}.q.{}2'.format(project, x)) \
+    q_files = [os.path.join(directory, '.{}.q.{}2'.format(project, x)) \
               for x in ['a', 'd']]
-    trim_files = [os.path.join(directory, '{}.trim.{}2'.format(project, x)) \
+    trim_files = [os.path.join(directory, '.{}.trim.{}2'.format(project, x)) \
                   for x in ['a', 'd']]
     block_annot_file = os.path.join(
         directory, '.{}.{{}}.{{}}.{{}}2'.format(project))
@@ -685,13 +690,19 @@ def patch_blocks(n, max_simultaneous_tasks, force=False):
             print('All block annotations are ready, '
                   'but TKmerge has to be run before '
                   'patching can start')
-        exit(1)
+        sys.exit(1)
 
     print('Fetching merged blocks...')
     blocks = get_merged_blocks()
     print('{} merged blocks found'.format(len(blocks)))
 
     run_directory = os.path.join(directory, 'patch_runs')
+
+    config.update('patch_blocks', 'run_directory', run_directory, '.')
+    config.update('patch_blocks', 'timelimit', timelimit, '4-00:00:00')
+    config.update('patch_blocks', 'trim', trim, False)
+    config.update('patch_blocks', 'min_read_length', min_read_length, 3000)
+
     if not os.path.exists(run_directory):
         os.mkdir(run_directory)
     reservation_token = get_reservation_token()
@@ -699,18 +710,17 @@ def patch_blocks(n, max_simultaneous_tasks, force=False):
                                     'patch_task_{}_{{}}.txt' \
                                     .format(reservation_token))
 
-    q_file = os.path.join(directory, '.{}.{{}}.q.a2'.format(project))
-
     print('Reserving maximum {} blocks...'.format(n))
     blocks_to_patch = []
     task_id = 0
     for b in blocks:
-        if not os.path.exists(q_file.format(b)):
-            continue
+        fasta_file = os.path.join(
+            directory, patch_job_array.out_filename \
+            .format(db=project, block=b,
+                    trim='.trimmed' \
+                        if config.getboolean('patch_blocks', 'trim') \
+                        else ''))
 
-        fasta_file = os.path.join(directory,
-                                  patch_job_array.out_filename \
-                                    .format(db=project, block=b))
         if not force \
            and os.path.exists(fasta_file):
             continue
@@ -724,20 +734,16 @@ def patch_blocks(n, max_simultaneous_tasks, force=False):
         task_id += 1
         with open(reservation_file.format(task_id), 'w') as f:
             f.write('{}\n'.format(b))
+
     print('Reserved {} blocks'.format(len(blocks_to_patch)))
     if len(blocks_to_patch) == 0:
         print('No blocks available to patch')
         return
 
     job = patch_job_array(blocks_to_patch,
-                          project,
                           max_simultaneous_tasks,
-                          script_directory=config.get('general',
-                                                      'script_directory'),
-                          log_directory=config.get('general', 'log_directory'),
-                          reservation_token=reservation_token,
-                          run_directory=run_directory,
-                          account=config.get('general', 'account'))
+                          config,
+                          reservation_token=reservation_token)
 
     jobid = job.start()
 
@@ -1166,15 +1172,19 @@ def parse_args():
                                 action='store_true')
 
     # blocks patch
-    block_patch = block_subparsers.add_parser('patch',
-                                              help='patch blocks',
-                                              description='Run LAfix on a '
-                                              'merged and annotated block.')
+    block_patch = block_subparsers.add_parser(
+        'patch', help='patch blocks',
+        description='Run LAfix on a merged and annotated block.',
+        parents=[general_args_parser])
     block_patch.add_argument('-n', help='maximum number of blocks to process '
                              '(default: 1)', type=int, default=1)
     block_patch.add_argument('--max-simultaneous-tasks', help='maximum number '
                              'of tasks allowed to run simultaneously '
                              '(default: N)', type=int)
+    block_patch.add_argument('--trim', help='trim reads based on the trim '
+                             'track', action='store_true')
+    block_patch.add_argument('-x', help='minimum read length after patching',
+                             type=int)
     block_patch.add_argument('-f', '--force', help='start patching even if '
                              'the corresponding fasta file already exists',
                              action='store_true')
@@ -1374,7 +1384,10 @@ def main():
     if args.subcommand == 'blocks' and args.subsubcommand == 'patch':
         patch_blocks(n=args.n,
                      max_simultaneous_tasks=args.max_simultaneous_tasks,
-                     force=args.force)
+                     trim=args.trim,
+                     min_read_length=args.x,
+                     force=args.force,
+                     timelimit=args.timelimit)
     if args.subcommand == 'blocks' and args.subsubcommand == 'stats':
         block_stats(n=args.n,
                     max_simultaneous_tasks=args.max_simultaneous_tasks,

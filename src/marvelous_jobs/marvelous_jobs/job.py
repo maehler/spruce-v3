@@ -59,7 +59,7 @@ class marvel_job:
         str
             The generated command line.
         """
-        lines = []
+        lines = ['']
         for args in self.args:
             lines.append(' '.join(str(x) for x in args if x is not None \
                                   and len(str(x)) > 0))
@@ -547,18 +547,13 @@ class annotate_job_array(marvel_job):
 class patch_job_array(marvel_job):
 
     filename = 'patch_block.sh'
-    out_filename = '{db}.{block}.patched.fasta'
+    out_filename = '{db}.{block}.patched{trim}.fasta'
 
     def __init__(self,
                  blocks,
-                 project,
-                 max_simultaneous_tasks=None,
-                 script_directory=None,
-                 log_directory=None,
-                 reservation_token=None,
-                 run_directory=None,
-                 account=None,
-                 timelimit='4:00:00'):
+                 max_simultaneous_tasks,
+                 config,
+                 reservation_token=None):
 
         jobname = 'patching'
 
@@ -566,26 +561,24 @@ class patch_job_array(marvel_job):
             raise ValueError('reservation token must not be None')
         self.reservation_token = reservation_token
 
-        if run_directory is None:
-            self.run_directory = os.path.abspath('.')
-        else:
-            self.run_directory = run_directory
+        try:
+            run_directory = config.get('patch_blocks', 'run_directory')
+            script_directory = config.get('general', 'script_directory')
+            log_directory = config.get('general', 'log_directory')
+            project = config.get('general', 'name')
+            timelimit = config.get('patch_blocks', 'timelimit')
+            account = config.get('general', 'account')
+            self.trim = config.getboolean('patch_blocks', 'trim')
+            min_read_length = config.getint('patch_blocks', 'min_read_length')
+        except KeyError:
+            raise
 
-        if script_directory is None:
-            self.filename = patch_job_array.filename
-        else:
-            self.filename = os.path.join(script_directory,
-                                         patch_job_array.filename)
-
-        if log_directory is None:
-            self.logfile = '{}_{}_%a_%A_%a.log' \
-                    .format(os.path.splitext(patch_job_array.filename)[0],
-                            self.reservation_token)
-        else:
-            self.logfile = os.path.join(
-                log_directory, '{}_{}_%a_%A_%a.log' \
-                .format(os.path.splitext(patch_job_array.filename)[0],
-                        self.reservation_token))
+        self.filename = os.path.join(script_directory,
+                                     patch_job_array.filename)
+        self.logfile = os.path.join(
+            log_directory, '{}_{}_%a_%A_%a.log' \
+            .format(os.path.splitext(patch_job_array.filename)[0],
+                    self.reservation_token))
 
         if len(blocks) > 1000:
             raise ValueError('maximum 1000 blocks can be run, tried to '
@@ -597,6 +590,8 @@ class patch_job_array(marvel_job):
 
         args = [
             ['reservation=$1'],
+            ['trim=$2'],
+            [],
             ['reservation_filename="{}/patch_task_${{reservation}}'
              '_${{SLURM_ARRAY_TASK_ID}}.txt"' \
              .format(run_directory)],
@@ -605,12 +600,28 @@ class patch_job_array(marvel_job):
             ['echo', '"Patching block ${block}"'],
             ['db="{}"'.format(project)],
             [],
-            ['LAfix',
+            ['if [[ ${trim} == "True"  ]]; then'],
+            ['\tLAfix',
              '-g', '-1',
-             '-x', '3000',
+             '-x', min_read_length,
+             '-q', 'q',
+             '-t', 'trim',
              '${db}',
              '${db}.${block}.las',
-             patch_job_array.out_filename.format(db='${db}', block='${block}')]
+             patch_job_array.out_filename. \
+             format(db='${db}', block='${block}',
+                    trim='.trimmed')],
+            ['else'],
+            ['\tLAfix',
+             '-g', '-1',
+             '-x', min_read_length,
+             '-q', 'q',
+             '${db}',
+             '${db}.${block}.las',
+             patch_job_array.out_filename. \
+             format(db='${db}', block='${block}',
+                    trim='')],
+            ['fi']
         ]
 
         super().__init__(args,
@@ -621,6 +632,11 @@ class patch_job_array(marvel_job):
                          account=account,
                          array=self.array_indices,
                          cores=1)
+
+    def start(self, dryrun=False):
+        return super().start(dryrun, True,
+                             self.reservation_token,
+                             self.trim)
 
 class stats_job_array(marvel_job):
 
