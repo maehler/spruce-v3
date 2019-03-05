@@ -22,6 +22,8 @@ class marvelous_config:
         self.save()
 
     def get(self, section, key, default=None):
+        if not self.config.has_option(section, key):
+            raise KeyError('key {}:{} does not exist'.format(section, key))
         value = self.config.get(section, key, fallback=default)
         if value == 'None':
             return None
