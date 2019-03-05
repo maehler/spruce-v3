@@ -161,13 +161,20 @@ class marvel_job:
                         if self.account is not None else '',
                      '#SBATCH -w {0}'.format(self.sbatch_args.get('node')) \
                         if self.sbatch_args.get('node') is not None else '',
-                     '#SBATCH -C {0}'.format(self.sbatch_args.get('constraint')) \
-                        if self.sbatch_args.get('constraint') is not None else '',
-                     '#SBATCH -t {0}'.format(self.sbatch_args.get('timelimit')) \
-                        if self.sbatch_args.get('timelimit') is not None else '',
-                     '#SBATCH -p {0}'.format(self.sbatch_args.get('partition')) \
-                        if self.sbatch_args.get('partition') is not None else '',
-                     '#SBATCH -n {0}'.format(self.sbatch_args.get('cores')) \
+                     '#SBATCH -C {0}' \
+                        .format(self.sbatch_args.get('constraint')) \
+                        if self.sbatch_args.get('constraint') is not None \
+                        else '',
+                     '#SBATCH -t {0}' \
+                        .format(self.sbatch_args.get('timelimit')) \
+                        if self.sbatch_args.get('timelimit') is not None \
+                        else '',
+                     '#SBATCH -p {0}' \
+                        .format(self.sbatch_args.get('partition')) \
+                        if self.sbatch_args.get('partition') is not None \
+                        else '',
+                     '#SBATCH -n {0}' \
+                        .format(self.sbatch_args.get('cores')) \
                         if self.sbatch_args.get('cores') is not None else '',
                      '#SBATCH --dependency after:{0}'\
                         .format(self.sbatch_args.get('after')) \
@@ -192,7 +199,8 @@ class prepare_job(marvel_job):
         else:
             self.filename = prepare_job.filename
         if log_directory is not None:
-            self.logfile = os.path.join(log_directory, '{0}.log'.format(jobname))
+            self.logfile = os.path.join(
+                log_directory, '{0}.log'.format(jobname))
         super().__init__(args,
                          jobname,
                          self.filename,
@@ -239,15 +247,17 @@ class daligner_job_array(marvel_job):
                     .format(os.path.splitext(daligner_job_array.filename)[0],
                             self.reservation_token)
         else:
-            self.logfile = os.path.join(log_directory, '{0}_{1}_%a_%A_%a.log' \
-                                        .format(os.path.splitext(daligner_job_array.filename)[0],
-                                                self.reservation_token))
+            self.logfile = os.path.join(
+                log_directory, '{0}_{1}_%a_%A_%a.log' \
+                .format(os.path.splitext(daligner_job_array.filename)[0],
+                        self.reservation_token))
 
         sqlite_timeout = '-init <(echo .timeout 30000)'
         args = [
             # Setup
             ['reservation=$1'],
-            ['reservation_filename="{0}/daligner_task_${{reservation}}_${{SLURM_ARRAY_TASK_ID}}.txt"' \
+            ['reservation_filename="{0}/daligner_task_${{reservation}}'
+             '_${{SLURM_ARRAY_TASK_ID}}.txt"' \
              .format(run_directory)],
             ['echo', '"Using reservation in $reservation_filename"'],
             ['project=$(sqlite3 {0} {1} "SELECT name FROM project")' \
@@ -271,7 +281,8 @@ class daligner_job_array(marvel_job):
             ['\tblocks=(${line[@]:$(expr $n_comparisons + 1)})'],
             ['\techo "Starting job(s) ${rowids[@]}: '
              '${source_block} vs ${blocks[@]}"'],
-            ['\tif {0}'.format(os.path.join(marvel.config.PATH_BIN, 'daligner')),
+            ['\tif {0}'.format(
+                os.path.join(marvel.config.PATH_BIN, 'daligner')),
              '-v' if verbose else '',
              '-I' if identity else '',
              '-t', tuple_suppression_frequency,
@@ -280,7 +291,8 @@ class daligner_job_array(marvel_job):
              '${{maskip}}:{0}'.format(masking_port) \
                 if self.use_masking_server else '',
              '-j', threads,
-             '"${project}.${source_block}"', '"${blocks[@]/#/${project}.}"; then'],
+             '"${project}.${source_block}"',
+             '"${blocks[@]/#/${project}.}"; then'],
             ['\t\techo "Finished job(s) ${rowids[@]}: '
              '${source_block} vs ${blocks[@]}"'],
             ['\telse'],
@@ -408,9 +420,10 @@ class merge_job_array(marvel_job):
                     .format(os.path.splitext(merge_job_array.filename)[0],
                             self.reservation_token)
         else:
-            self.logfile = os.path.join(log_directory, '{}_{}_%a_%A_%a.log' \
-                                        .format(os.path.splitext(merge_job_array.filename)[0],
-                                                self.reservation_token))
+            self.logfile = os.path.join(
+                log_directory, '{}_{}_%a_%A_%a.log' \
+                .format(os.path.splitext(merge_job_array.filename)[0],
+                        self.reservation_token))
 
         if len(blocks) > 1000:
             raise ValueError('maximum 1000 blocks can be merged, tried to '
@@ -423,11 +436,14 @@ class merge_job_array(marvel_job):
         sqlite_timeout = '-init <(echo .timeout 30000)'
         args = [
             ['reservation=$1'],
-            ['reservation_filename="{}/merge_task_${{reservation}}_${{SLURM_ARRAY_TASK_ID}}.txt"' \
+            ['reservation_filename="{}/merge_task_${{reservation}}_'
+             '${{SLURM_ARRAY_TASK_ID}}.txt"' \
              .format(run_directory)],
             ['echo', '"Using reservation in $reservation_filename"'],
             ['block=$(cat ${reservation_filename})'],
-            ['echo', '"Merging block ${block} in job ${SLURM_JOB_ID} (array ${SLURM_ARRAY_JOB_ID})"'],
+            ['echo',
+             '"Merging block ${block} in job ${SLURM_JOB_ID}',
+             '(array ${SLURM_ARRAY_JOB_ID})"'],
             ['db="{}"'.format(project)],
             [],
             ['LAmerge',
@@ -486,9 +502,10 @@ class annotate_job_array(marvel_job):
                     .format(os.path.splitext(annotate_job_array.filename)[0],
                             self.reservation_token)
         else:
-            self.logfile = os.path.join(log_directory, '{}_{}_%a_%A_%a.log' \
-                                        .format(os.path.splitext(annotate_job_array.filename)[0],
-                                                self.reservation_token))
+            self.logfile = os.path.join(
+                log_directory, '{}_{}_%a_%A_%a.log' \
+                .format(os.path.splitext(annotate_job_array.filename)[0],
+                        self.reservation_token))
 
         if len(blocks) > 1000:
             raise ValueError('maximum 1000 blocks can be run, tried to '
@@ -501,7 +518,8 @@ class annotate_job_array(marvel_job):
         sqlite_timeout = '-init <(echo .timeout 30000)'
         args = [
             ['reservation=$1'],
-            ['reservation_filename="{}/annotate_task_${{reservation}}_${{SLURM_ARRAY_TASK_ID}}.txt"' \
+            ['reservation_filename="{}/annotate_task_${{reservation}}'
+             '_${{SLURM_ARRAY_TASK_ID}}.txt"' \
              .format(run_directory)],
             ['echo', '"Using reservation in $reservation_filename"'],
             ['block=$(cat ${reservation_filename})'],
@@ -564,9 +582,10 @@ class patch_job_array(marvel_job):
                     .format(os.path.splitext(patch_job_array.filename)[0],
                             self.reservation_token)
         else:
-            self.logfile = os.path.join(log_directory, '{}_{}_%a_%A_%a.log' \
-                                        .format(os.path.splitext(patch_job_array.filename)[0],
-                                                self.reservation_token))
+            self.logfile = os.path.join(
+                log_directory, '{}_{}_%a_%A_%a.log' \
+                .format(os.path.splitext(patch_job_array.filename)[0],
+                        self.reservation_token))
 
         if len(blocks) > 1000:
             raise ValueError('maximum 1000 blocks can be run, tried to '
@@ -578,7 +597,8 @@ class patch_job_array(marvel_job):
 
         args = [
             ['reservation=$1'],
-            ['reservation_filename="{}/patch_task_${{reservation}}_${{SLURM_ARRAY_TASK_ID}}.txt"' \
+            ['reservation_filename="{}/patch_task_${{reservation}}'
+             '_${{SLURM_ARRAY_TASK_ID}}.txt"' \
              .format(run_directory)],
             ['echo', '"Using reservation in $reservation_filename"'],
             ['block=$(cat ${reservation_filename})'],
@@ -640,9 +660,10 @@ class stats_job_array(marvel_job):
                     .format(os.path.splitext(stats_job_array.filename)[0],
                             self.reservation_token)
         else:
-            self.logfile = os.path.join(log_directory, '{}_{}_%a_%A_%a.log' \
-                                        .format(os.path.splitext(stats_job_array.filename)[0],
-                                                self.reservation_token))
+            self.logfile = os.path.join(
+                log_directory, '{}_{}_%a_%A_%a.log' \
+                .format(os.path.splitext(stats_job_array.filename)[0],
+                        self.reservation_token))
 
         if len(blocks) > 1000:
             raise ValueError('maximum 1000 blocks can be run, tried to '
@@ -654,7 +675,8 @@ class stats_job_array(marvel_job):
 
         args = [
             ['reservation=$1'],
-            ['reservation_filename="{}/stats_task_${{reservation}}_${{SLURM_ARRAY_TASK_ID}}.txt"' \
+            ['reservation_filename="{}/stats_task_${{reservation}}_'
+             '${{SLURM_ARRAY_TASK_ID}}.txt"' \
              .format(run_directory)],
             ['echo', '"# Using reservation in $reservation_filename"'],
             ['block=$(cat ${reservation_filename})'],
