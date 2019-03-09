@@ -631,7 +631,7 @@ class patch_job_array(marvel_job):
                          timelimit=timelimit,
                          account=account,
                          array=self.array_indices,
-                         cores=1)
+                         cores=6)
 
     def start(self, dryrun=False):
         return super().start(dryrun, True,

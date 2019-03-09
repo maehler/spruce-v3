@@ -699,7 +699,7 @@ def patch_blocks(n,
     run_directory = os.path.join(directory, 'patch_runs')
 
     config.update('patch_blocks', 'run_directory', run_directory, '.')
-    config.update('patch_blocks', 'timelimit', timelimit, '4-00:00:00')
+    config.update('patch_blocks', 'timelimit', timelimit, '12:00:00')
     config.update('patch_blocks', 'trim', trim, False)
     config.update('patch_blocks', 'min_read_length', min_read_length, 3000)
 
