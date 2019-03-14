@@ -21,7 +21,9 @@ if [[ $1 != "assembly" ]] && [[ $1 != "consensus" ]]; then
     exit 1
 fi
 
+set +u
 conda activate wtdbg2
+set -u
 
 proj_dir="/proj/uppstore2017145/V3"
 output_dir="$proj_dir/wtdbg2"
@@ -33,11 +35,11 @@ fi
 if [[ $1 == "assembly" ]]; then
     wtdbg2 \
         -i "$proj_dir/data/genome/ps_021/fasta/30x_longest_clean.fasta" \
-        -fo "$proj_dir/wtdbg2/spruce" \
+        -fo "$output_dir/spruce" \
         -t 20 \
         -x sq \
         -g 20g
-else if [[ $1 == "consensus" ]]; then
+elif [[ $1 == "consensus" ]]; then
     echo >&2 "error: not implemented yet"
     exit 1
 fi
