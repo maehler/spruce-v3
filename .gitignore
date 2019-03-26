@@ -3,7 +3,12 @@ longest_n
 *.so
 *.a
 *.pyc
+__pycache__/
+*.egg
+*.egg-info
 build_index
 print_index
 *.fa
 *.idx
+src/marvelous_jobs/build
+src/marvelous_jobs/dist
