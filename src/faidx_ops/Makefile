@@ -1,6 +1,6 @@
 INCLUDES=-I. -I/crex/proj/uppstore2017145/V3/software/include/fastxio -I/sw/apps/build/boost/1.63.0_gcc6.3.0/rackham/lib
 LIBRARIES=-L/crex/proj/uppstore2017145/V3/software/lib
-FLAGS=-O3 -std=c++11
+FLAGS=-O3 -std=c++11 -fopenmp -march=native
 LIBS=-lfastxio -lbz2
 
 default: all
@@ -19,11 +19,17 @@ build_index.o: build_index.cpp
 print_index.o: print_index.cpp
 	g++ $(INCLUDES) $(LIBRARIES) $(FLAGS) -c print_index.cpp
 
+longest_x.o: longest_x.cpp
+	g++ $(INCLUDES) $(LIBRARIES) $(FLAGS) -c longest_x.cpp
+
 build_index: build_index.o MurmurHash3.o index.o
 	g++ $(INCLUDES) $(LIBRARIES) $(FLAGS) -o build_index index.o MurmurHash3.o build_index.o /sw/apps/build/boost/1.63.0_gcc6.3.0/rackham/lib/libboost_serialization.so.1.63.0 $(LIBS)
 
 print_index: print_index.o MurmurHash3.o index.o
 	g++ $(INCLUDES) $(LIBRARIES) $(FLAGS) -o print_index index.o MurmurHash3.o print_index.o /sw/apps/build/boost/1.63.0_gcc6.3.0/rackham/lib/libboost_serialization.so.1.63.0 $(LIBS)
+
+longest_x: longest_x.o MurmurHash3.o index.o
+	g++ $(INCLUDES) $(LIBRARIES) $(FLAGS) -o longest_x index.o MurmurHash3.o longest_x.o /sw/apps/build/boost/1.63.0_gcc6.3.0/rackham/lib/libboost_serialization.so.1.63.0 $(LIBS)
 
 clean:
 	rm -f *.o

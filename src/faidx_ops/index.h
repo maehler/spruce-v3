@@ -41,8 +41,8 @@ class index_record {
   uint32_t nc;
   uint32_t nt;
   uint32_t nn;
-  uint64_t hash;
-  int offset;
+  uint32_t hash;
+  long long offset;
   std::string id;
 };
 
@@ -63,6 +63,7 @@ class FAidx
   FAidx(const std::string& index, const std::string& fasta);
   // Create new index
   void from_fasta(const std::string& infile);
+  void from_fasta(const std::string& infile, const uint64_t capacity);
   // Data access
   std::vector<index_record>& records() {return _records;}
  private:

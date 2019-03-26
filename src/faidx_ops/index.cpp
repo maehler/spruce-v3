@@ -12,6 +12,7 @@
 #include <boost/serialization/utility.hpp>
 #include <boost/serialization/list.hpp>
 #include <boost/serialization/assume_abstract.hpp>
+#include <boost/numeric/conversion/cast.hpp>
 #include <MurmurHash3.h>
 #include <algorithm>
 
@@ -42,13 +43,17 @@ void FAidx::save()
 
 void FAidx::from_fasta(const std::string& infile)
 {
+  from_fasta(infile, 1);
+}
+
+void FAidx::from_fasta(const std::string& infile, const uint64_t capacity)
+{
+  _records.reserve(capacity);
   FASTX::Reader R(infile.c_str(), DNA_SEQTYPE);
   while (R.peek() != EOF)
     {
       index_record rec;
-
       rec.offset = R.tell();
-      
       FASTX::Record r = R.next();
 
       FASTX::NucFrequency nf;
@@ -66,9 +71,8 @@ void FAidx::from_fasta(const std::string& infile)
 
       std::string seq = r.get_seq(); //find more efficient way
       
-      MurmurHash3_x64_128(&seq[0], rec.len, 314159265, &rec.hash);
+      MurmurHash3_x86_32(&seq[0], rec.len, 314159265, &rec.hash);
       _records.push_back(rec);
-
     }
 }
 
