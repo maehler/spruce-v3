@@ -21,5 +21,5 @@ setup(
     author='Niklas Mähler',
     author_email='niklas.mahler@gmail.com',
     description='Job manager for the MARVEL assembler',
-    url='https://github.com/bschiffthaler/spruce-v3/tree/master/src/marvelous_jobs'
+    url='https://github.com/maehler/spruce-v3/tree/master/src/marvelous_jobs'
 )
