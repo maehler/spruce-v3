@@ -810,3 +810,73 @@ class annotation_merge_job(marvel_job):
                          log_filename=logfile,
                          account=config.get('general', 'account'),
                          timelimit=config.get(self.jobname, 'timelimit'))
+
+class repeat_annotation_array(marvel_job):
+
+    filename = 'repeat_annotation.sh'
+
+    def __init__(self,
+                 blocks,
+                 max_simultaneous_tasks,
+                 config,
+                 reservation_token):
+
+        jobname = 'annotate_repeats'
+
+        if reservation_token is None:
+            raise ValueError('reservation token must not be None')
+        self.reservation_token = reservation_token
+
+        try:
+            run_directory = config.get('repeat_annotation', 'run_directory')
+            script_directory = config.get('general', 'script_directory')
+            log_directory = config.get('general', 'log_directory')
+            project = config.get('general', 'name')
+            timelimit = config.get('repeat_annotation', 'timelimit')
+            account = config.get('general', 'account')
+            coverage = config.getint('general', 'coverage')
+        except KeyError:
+            raise
+
+        self.filename = os.path.join(script_directory,
+                                     repeat_annotation_array.filename)
+
+        logfile = os.path.join(log_directory, '{}.log'.format(jobname))
+
+        if len(blocks) > 1000:
+            raise ValueError('maximum 1000 blocks can be run, tried to '
+                             'annotate {}'.format(len(blocks)))
+
+        self.array_indices = '1-{}'.format(len(blocks))
+        if max_simultaneous_tasks is not None:
+            self.array_indices += '%{}'.format(max_simultaneous_tasks)
+
+        args = [
+            ['reservation=$1'],
+            [],
+            ['reservation_filename="{rundir}/{jobname}_${{reservation}}'
+             '_${{SLURM_ARRAY_TASK_ID}}.txt' \
+             .format(rundir=run_directory, jobname=jobname)],
+            ['echo', '"# Using reservation in ${reservation_filename}"'],
+            ['echo', '"# Annotating block ${block}"'],
+            ['db="{}"'.format(project)],
+            [],
+            ['LArepeat',
+             '-c', coverage,
+             '-b', '${block}',
+             '${db}',
+             '${db}.${block}.las']
+        ]
+
+        super().__init__(args,
+                         jobname,
+                         self.filename,
+                         log_filename=logfile,
+                         timelimit=timelimit,
+                         account=account,
+                         array=self.array_indices,
+                         cores=1)
+
+    def start(self, dryrun=False):
+        return super().start(dryrun, True,
+                             self.reservation_token)

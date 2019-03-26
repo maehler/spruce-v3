@@ -21,6 +21,7 @@ from marvelous_jobs import check_job
 from marvelous_jobs import merge_job_array
 from marvelous_jobs import annotate_job_array
 from marvelous_jobs import annotation_merge_job
+from marvelous_jobs import repeat_annotation_array
 from marvelous_jobs import patch_job_array
 from marvelous_jobs import stats_job_array
 from marvelous_jobs import slurm_utils
@@ -52,6 +53,7 @@ def init(name, coverage, account=None, directory='.', force=False,
             'name': name,
             'account': account,
             'database': db_name,
+            'coverage': coverage,
             'directory': os.path.abspath(directory),
             'max_number_of_jobs': n_jobs
         },
@@ -749,14 +751,71 @@ def patch_blocks(n,
 
     print('Jobs submitted in job array {}'.format(jobid))
 
+def repeat_annotate(n,
+                    max_simultaneous_tasks=None,
+                    timelimit=None):
+    config = mc()
+    db = get_database()
+
+    print('Fetching merged blocks...')
+    blocks = get_merged_blocks()
+    print('{} merged blocks found'.format(len(blocks)))
+
+    directory = config.get('general', 'directory')
+    project = config.get('general', 'name')
+    run_directory = os.path.join(directory, 'repeat_runs')
+
+    config.update('repeat_annotation', 'run_directory', run_directory, '.')
+    config.update('repeat_annotation', 'timelimit', timelimit, '12:00:00')
+
+    if not os.path.exists(run_directory):
+        os.mkdir(run_directory)
+    reservation_token = get_reservation_token()
+    reservation_file = os.path.join(run_directory,
+                                    'annotate_repeats_{}_{{}}.txt' \
+                                    .format(reservation_token))
+
+    print('Reserving maximum {} blocks...'.format(n))
+    blocks_to_annotate = []
+    task_id = 0
+    for b in blocks:
+        repeat_file = os.path.join(
+            directory, '.{db}.{block}.repeats.a2' \
+            .format(db=project, block=b))
+
+        if os.path.exists(repeat_file):
+            continue
+
+        if len(blocks_to_annotate) == n:
+            break
+
+        open(repeat_file, 'a').close()
+        blocks_to_annotate.append(b)
+
+        task_id += 1
+        with open(reservation_file.format(task_id), 'w') as f:
+            f.write('{}\n'.format(b))
+
+    print('Reserved {} blocks'.format(len(blocks_to_annotate)))
+    if len(blocks_to_annotate) == 0:
+        print('No blocks available to annotate')
+        return
+
+    job = repeat_annotation_array(blocks_to_annotate,
+                                  max_simultaneous_tasks,
+                                  config,
+                                  reservation_token=reservation_token)
+
+    jobid = job.start()
+
+    print('Jobs submitted in job array {}'.format(jobid))
+
 def block_stats(n, max_simultaneous_tasks=None, force=False):
     config = mc()
     db = get_database()
 
     project = db.get_project_name()
     directory = config.get('general', 'directory')
-
-    get_merged_blocks()
 
     print('Fetching merged blocks...')
     blocks = get_merged_blocks()
@@ -1189,6 +1248,17 @@ def parse_args():
                              'the corresponding fasta file already exists',
                              action='store_true')
 
+    # blocks repeat
+    block_repeat = block_subparsers.add_parser(
+        'repeat', help='repeat annotation',
+        description='Run LArepeat on a merged block.',
+        parents=[general_args_parser])
+    block_repeat.add_argument('-n', help='maximum number of blocks to process '
+                              '(default: 1)', type=int, default=1)
+    block_repeat.add_argument('--max-simultaneous-tasks', help='maximum number '
+                              'of tasks allowed to run simultaneously '
+                              '(default: N)', type=int)
+
     # blocks stats
     block_stats = block_subparsers.add_parser('stats',
                                               help='calculate summary '
@@ -1309,7 +1379,8 @@ def parse_args():
     if args.subcommand == 'blocks' and (args.subsubcommand == 'merge' \
                                         or args.subsubcommand == 'annotate' \
                                         or args.subsubcommand == 'patch' \
-                                        or args.subsubcommand == 'stats'):
+                                        or args.subsubcommand == 'stats' \
+                                        or args.subsubcommand == 'repeat'):
         if not positive_integer(args.n):
             parser.error('n must be a non-zero integer')
         if args.max_simultaneous_tasks is not None and \
@@ -1388,6 +1459,10 @@ def main():
                      min_read_length=args.x,
                      force=args.force,
                      timelimit=args.timelimit)
+    if args.subcommand == 'blocks' and args.subsubcommand == 'repeat':
+        repeat_annotate(n=args.n,
+                        max_simultaneous_tasks=args.max_simultaneous_tasks,
+                        timelimit=args.timelimit)
     if args.subcommand == 'blocks' and args.subsubcommand == 'stats':
         block_stats(n=args.n,
                     max_simultaneous_tasks=args.max_simultaneous_tasks,
