@@ -841,7 +841,9 @@ class repeat_annotation_array(marvel_job):
         self.filename = os.path.join(script_directory,
                                      repeat_annotation_array.filename)
 
-        logfile = os.path.join(log_directory, '{}.log'.format(jobname))
+        logfile = os.path.join(log_directory,
+                               '{}_{}_%a_%A_%a.log' \
+                               .format(jobname, self.reservation_token))
 
         if len(blocks) > 1000:
             raise ValueError('maximum 1000 blocks can be run, tried to '
@@ -855,9 +857,10 @@ class repeat_annotation_array(marvel_job):
             ['reservation=$1'],
             [],
             ['reservation_filename="{rundir}/{jobname}_${{reservation}}'
-             '_${{SLURM_ARRAY_TASK_ID}}.txt' \
+             '_${{SLURM_ARRAY_TASK_ID}}.txt"' \
              .format(rundir=run_directory, jobname=jobname)],
             ['echo', '"# Using reservation in ${reservation_filename}"'],
+            ['block=$(cat ${reservation_filename})'],
             ['echo', '"# Annotating block ${block}"'],
             ['db="{}"'.format(project)],
             [],
