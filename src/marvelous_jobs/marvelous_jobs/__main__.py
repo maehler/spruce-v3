@@ -79,6 +79,13 @@ def prepare(fasta, blocksize, script_directory, log_directory, force=False):
               'did you run init?', file=sys.stderr)
         sys.exit(1)
 
+    config = mc()
+    config.set('general', 'blocksize', blocksize)
+    config.set('general', 'script_directory',
+               os.path.abspath(script_directory))
+    config.set('general', 'log_directory', os.path.abspath(log_directory))
+    config.set('general', 'fasta', os.path.abspath(fasta))
+
     db = get_database()
     update_statuses()
 
@@ -98,13 +105,6 @@ def prepare(fasta, blocksize, script_directory, log_directory, force=False):
         os.mkdir(script_directory)
     if not os.path.exists(log_directory):
         os.mkdir(log_directory)
-
-    config = mc()
-    config.set('general', 'blocksize', blocksize)
-    config.set('general', 'script_directory',
-               os.path.abspath(script_directory))
-    config.set('general', 'log_directory', os.path.abspath(log_directory))
-    config.set('general', 'fasta', os.path.abspath(fasta))
 
     db.add_prepare_job()
     job = prepare_job(projname, fasta, blocksize,
