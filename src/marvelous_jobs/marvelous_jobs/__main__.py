@@ -654,6 +654,7 @@ def merge_annotations(timelimit=None):
 
 def patch_blocks(n,
                  max_simultaneous_tasks=None,
+                 update_annotations=None,
                  trim=False,
                  min_read_length=None,
                  force=False,
@@ -744,6 +745,7 @@ def patch_blocks(n,
 
     job = patch_job_array(blocks_to_patch,
                           max_simultaneous_tasks,
+                          update_annotations,
                           config,
                           reservation_token=reservation_token)
 
@@ -1240,6 +1242,10 @@ def parse_args():
     block_patch.add_argument('--max-simultaneous-tasks', help='maximum number '
                              'of tasks allowed to run simultaneously '
                              '(default: N)', type=int)
+    block_patch.add_argument('--update-annotations', metavar='track',
+                             help='adjust track intervals based on the changes '
+                             'made to the read', type=str,
+                             choices=['q', 'trim', 'repeats'])
     block_patch.add_argument('--trim', help='trim reads based on the trim '
                              'track', action='store_true')
     block_patch.add_argument('-x', help='minimum read length after patching',
@@ -1455,6 +1461,7 @@ def main():
     if args.subcommand == 'blocks' and args.subsubcommand == 'patch':
         patch_blocks(n=args.n,
                      max_simultaneous_tasks=args.max_simultaneous_tasks,
+                     update_annotations=args.update_annotations,
                      trim=args.trim,
                      min_read_length=args.x,
                      force=args.force,
