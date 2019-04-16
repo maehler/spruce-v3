@@ -635,7 +635,8 @@ def merge_annotations(timelimit=None):
     for b in range(1, n_blocks + 1):
         files = map(lambda x: x.format(project, b),
                     ['.{}.{}.q.a2', '.{}.{}.q.d2',
-                     '.{}.{}.trim.a2', '.{}.{}.q.a2'])
+                     '.{}.{}.trim.a2', '.{}.{}.trim.d2',
+                     '.{}.{}.repeats.a2', '.{}.{}.repeats.d2'])
         for f in files:
             if not os.path.isfile(os.path.join(proj_dir, f)) \
                or os.stat(os.path.join(proj_dir, f)).st_size == 0:

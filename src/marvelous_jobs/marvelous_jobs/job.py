@@ -808,7 +808,8 @@ class annotation_merge_job(marvel_job):
 
         args = [
             ['TKmerge', config.get('general', 'name'), 'q'],
-            ['TKmerge', config.get('general', 'name'), 'trim']
+            ['TKmerge', config.get('general', 'name'), 'trim'],
+            ['TKmerge', config.get('general', 'name'), 'repeats']
         ]
 
         super().__init__(args,
