@@ -552,7 +552,7 @@ class patch_job_array(marvel_job):
     def __init__(self,
                  blocks,
                  max_simultaneous_tasks,
-                 update_annotations,
+                 update_repeat_annotations,
                  config,
                  reservation_token=None):
 
@@ -605,8 +605,9 @@ class patch_job_array(marvel_job):
             ['\tLAfix',
              '-g', '-1',
              '-x', min_read_length,
-             '-c' if update_annotations is not None else '',
-             '${{block}}.{}'.format(update_annotations) if update_annotations is not None else '',
+             '-c' if update_repeat_annotations else '',
+             'repeats'.format(update_repeat_annotations) \
+                if update_repeat_annotations else '',
              '-q', 'q',
              '-t', 'trim',
              '${db}',
@@ -618,8 +619,9 @@ class patch_job_array(marvel_job):
             ['\tLAfix',
              '-g', '-1',
              '-x', min_read_length,
-             '-c' if update_annotations is not None else '',
-             '${{block}}.{}'.format(update_annotations) if update_annotations is not None else '',
+             '-c' if update_repeat_annotations else '',
+             'repeats'.format(update_repeat_annotations) \
+                if update_repeat_annotations else '',
              '-q', 'q',
              '${db}',
              '${db}.${block}.las',
