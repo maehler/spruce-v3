@@ -210,9 +210,9 @@ class marvel_db:
 
         token_regex = re.compile('|'.join(unique_tokens))
         jobid_regex = re.compile(r'_(\d+_\d+)\.log$')
-        started_regex = re.compile(r'^Starting job\(s\) ((\d+ ?)+)')
-        completed_regex = re.compile(r'^Finished job\(s\) ((\d+ ?)+)')
-        failed_regex = re.compile(r'^Failed job\(s\) ((\d+ ?)+)')
+        started_regex = re.compile(r'Starting job\(s\) ((\d+ ?)+)')
+        completed_regex = re.compile(r'Finished job\(s\) ((\d+ ?)+)')
+        failed_regex = re.compile(r'Failed job\(s\) ((\d+ ?)+)')
 
         start = time.time()
 

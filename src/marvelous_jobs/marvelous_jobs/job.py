@@ -279,7 +279,7 @@ class daligner_job_array(marvel_job):
             ['\tn_comparisons=$(expr $n \/ 2)'],
             ['\trowids=(${line[@]:1:$n_comparisons})'],
             ['\tblocks=(${line[@]:$(expr $n_comparisons + 1)})'],
-            ['\techo "Starting job(s) ${rowids[@]}: '
+            ['\techo "[$(date "+%F %T")] Starting job(s) ${rowids[@]}: '
              '${source_block} vs ${blocks[@]}"'],
             ['\tif {0}'.format(
                 os.path.join(marvel.config.PATH_BIN, 'daligner')),
@@ -293,10 +293,10 @@ class daligner_job_array(marvel_job):
              '-j', threads,
              '"${project}.${source_block}"',
              '"${blocks[@]/#/${project}.}"; then'],
-            ['\t\techo "Finished job(s) ${rowids[@]}: '
+            ['\t\techo "[$(date "+%F %T")] Finished job(s) ${rowids[@]}: '
              '${source_block} vs ${blocks[@]}"'],
             ['\telse'],
-            ['\t\techo "Failed job(s) ${rowids[@]}: '
+            ['\t\techo "[$(date "+%F %T")] Failed job(s) ${rowids[@]}: '
              '${source_block} vs ${blocks[@]}"'],
             ['\tfi'],
             ['done', '<', '$reservation_filename']
