@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='marvelous_jobs',
-    version='0.17.2',
+    version='0.17.3',
     packages=find_packages(),
 
     entry_points={
@@ -12,6 +12,7 @@ setup(
     },
 
     install_requires=[
+        'cython',
         'pyslurm'
     ],
 

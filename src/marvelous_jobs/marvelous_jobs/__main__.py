@@ -1072,8 +1072,11 @@ def update_statuses():
     djs = db.get_daligner_jobs(status=(slurm_utils.status.running,
                                        slurm_utils.status.reserved))
     print('fetched jobs in {0}'.format(time.time() - start))
-    db.update_daligner_jobs(djs, log_directory=config.get('general',
-                                                          'log_directory'))
+    try:
+        db.update_daligner_jobs(djs, log_directory=config.get('general',
+                                                              'log_directory'))
+    except KeyError as ke:
+        pass
 
 # Helper functions for the argument parsing
 def directory_exists(s):
