@@ -13,6 +13,8 @@ class marvel_db:
         is_new = not os.path.exists(filename)
         self.filename = filename
         self._db = sqlite3.connect(filename, timeout=60.0)
+        if is_new:
+            os.chmod(self.filename, 0o664)
         self._db.row_factory = sqlite3.Row
         self._c = self._db.cursor()
 
