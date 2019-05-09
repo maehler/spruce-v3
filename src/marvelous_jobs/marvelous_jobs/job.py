@@ -187,12 +187,16 @@ class prepare_job(marvel_job):
 
     filename = 'marvel_prepare.sh'
 
-    def __init__(self, name, fasta, blocksize,
+    def __init__(self, name, fasta, blocksize, annotation_tracks=None,
                  script_directory=None, log_directory=None,
-                 account=None):
+                 account=None, repeats=False):
         args = [os.path.join(marvel.config.PATH_SCRIPTS, 'DBprepare.py'),
-                '--blocksize', blocksize,
-                name, fasta]
+                '--blocksize', blocksize]
+
+        for at in annotation_tracks:
+            args += ['-c', at]
+
+        args += [name, fasta]
         jobname = 'marvel_prepare'
         if script_directory is not None:
             self.filename = os.path.join(script_directory, prepare_job.filename)
@@ -219,7 +223,8 @@ class daligner_job_array(marvel_job):
                  run_directory=None, reservation_token=None,
                  log_directory=None, jobs_per_task=100,
                  max_simultaneous_tasks=None, masking_jobid=None,
-                 masking_port=None,account=None, timelimit='1-00:00:00',
+                 masking_port=None, repeat_annotations=None,
+                 account=None, timelimit='1-00:00:00',
                  verbose=True, identity=True, tuple_suppression_frequency=20,
                  correlation_rate=0.7, threads=4):
         self.n_tasks = n_tasks
@@ -290,6 +295,8 @@ class daligner_job_array(marvel_job):
              '-D' if self.use_masking_server else '',
              '${{maskip}}:{0}'.format(masking_port) \
                 if self.use_masking_server else '',
+             '-m' if repeat_annotations is not None else '',
+             repeat_annotations if repeat_annotations is not None else '',
              '-j', threads,
              '"${project}.${source_block}"',
              '"${blocks[@]/#/${project}.}"; then'],

@@ -73,7 +73,8 @@ def init(name, coverage, account=None, directory='.', force=False,
         }
     })
 
-def prepare(fasta, blocksize, script_directory, log_directory, force=False):
+def prepare(fasta, blocksize, script_directory, log_directory, force=False,
+            annotation_tracks=None):
     if not is_project():
         print('error: no project found in current directory, '
               'did you run init?', file=sys.stderr)
@@ -108,6 +109,7 @@ def prepare(fasta, blocksize, script_directory, log_directory, force=False):
 
     db.add_prepare_job()
     job = prepare_job(projname, fasta, blocksize,
+                      annotation_tracks=annotation_tracks,
                       script_directory=config.get('general',
                                                   'script_directory'),
                       log_directory=config.get('general', 'log_directory'),
@@ -116,8 +118,8 @@ def prepare(fasta, blocksize, script_directory, log_directory, force=False):
     db.update_prepare_job_id(jobid)
 
 def start_daligner(jobs_per_task=100, max_simultaneous_tasks=None,
-                   force=False, no_masking=False, comparisons_per_job=1,
-                   threads=None, timelimit=None):
+                   force=False, no_masking=False, repeats=None,
+                   comparisons_per_job=1, threads=None, timelimit=None):
     config = mc()
     db = get_database()
     update_statuses()
@@ -158,6 +160,7 @@ def start_daligner(jobs_per_task=100, max_simultaneous_tasks=None,
     config.update('daligner', 'jobs_per_task', jobs_per_task)
     config.update('daligner', 'max_simultaneous_tasks', max_simultaneous_tasks)
     config.update('daligner', 'comparisons_per_job', comparisons_per_job)
+    config.update('daligner', 'repeats', repeats)
 
     projname = db.get_project_name()
 
@@ -254,6 +257,7 @@ def get_daligner_array(ntasks, config, db, masking_jobid=None):
                         'daligner', 'max_simultaneous_tasks'),
                     masking_jobid=masking_jobid,
                     masking_port=config.getint('DMserver', 'port'),
+                    repeat_annotations=config.get('daligner', 'repeats'),
                     account=config.get('general', 'account'),
                     timelimit=config.get('daligner', 'timelimit'),
                     verbose=config.getboolean('daligner', 'verbose'),
@@ -1143,6 +1147,9 @@ def parse_args():
                              '(default: 200)',
                              default=200, type=int, metavar='N',
                              dest='blocksize')
+    prep_parser.add_argument('-t', help='annotation tracks that should be '
+                             'extracted from FASTA headers', nargs='+',
+                             default=None, metavar='TRACK')
     prep_parser.add_argument('-f', '--force', help='force prepare',
                              action='store_true')
     prep_parser.add_argument('-d', '--script-directory',
@@ -1307,6 +1314,9 @@ def parse_args():
                               'of block comparisons that should be run for '
                               'each daligner job (default: 1)', type=int,
                               default=1)
+    dalign_start.add_argument('--repeats', help='supply daligner with repeat '
+                              'annotations with the identifier REPEAT',
+                              metavar='REPEAT', type=str, default=None)
     dalign_start.add_argument('-f', '--force', help='forcefully add daligner '
                               'jobs, removing any existing jobs',
                               action='store_true')
@@ -1428,7 +1438,8 @@ def main():
                 blocksize=args.blocksize,
                 script_directory=args.script_directory,
                 log_directory=args.log_directory,
-                force=args.force)
+                force=args.force,
+                annotation_tracks=args.t)
     if args.subcommand == 'mask' and args.subsubcommand == 'start':
         start_mask(args.threads, args.port, args.constraint, cluster=None)
     if args.subcommand == 'mask' and args.subsubcommand == 'status':
@@ -1439,6 +1450,7 @@ def main():
         start_daligner(jobs_per_task=args.jobs_per_task,
                        force=args.force,
                        no_masking=args.no_masking,
+                       repeats=args.repeats,
                        max_simultaneous_tasks=args.max_simultaneous_tasks,
                        comparisons_per_job=args.comparisons_per_job,
                        threads=args.threads,
