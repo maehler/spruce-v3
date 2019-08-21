@@ -3,7 +3,7 @@
 #SBATCH --account=snic2018-3-317
 #SBATCH --partition=core
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=1
+#SBATCH --cpus-per-task=5
 #SBATCH --time=1:00:00
 #SBATCH --job-name=spruce_og
 #SBATCH --mail-type=ALL
@@ -26,7 +26,10 @@ if [[ ! -f ${input_las} ]]; then
     echo "error: file or directory not found: ${input_las}" >&2
 fi
 
-trim_track=gap_trim
+# TODO: This trim track should ideally be based on the
+# alignments after fixing gaps, but for some reason
+# OGbuild does not like this file.
+trim_track=stitch_trim
 n_edges_to_dead_ends=1
 output_dir=$(dirname ${input_las})/components
 
