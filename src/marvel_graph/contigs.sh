@@ -36,11 +36,22 @@ paths_to_extract=$(comm -13 <(echo "${fastas}") <(echo "${paths}") | sort -V)
 # well with OGbuild for some reason.
 trim_track=stitch_trim
 
-echo "${paths_to_extract}" |
+echo "${paths_to_extract}" | \
+    xargs -n10 |
     parallel \
+        --colsep ' ' \
         --jobs 10 \
-        --results tour_to_fasta_logs/{} \
+        --results tour_to_fasta_logs/job_{#} \
         tour2fasta.py \
         -t ${trim_track} \
         ${database} \
-        {}.graphml {}.paths
+        {1}.graphml {1}.paths \
+        {2}.graphml {2}.paths \
+        {3}.graphml {3}.paths \
+        {4}.graphml {4}.paths \
+        {5}.graphml {5}.paths \
+        {6}.graphml {6}.paths \
+        {7}.graphml {7}.paths \
+        {8}.graphml {8}.paths \
+        {9}.graphml {9}.paths \
+        {10}.graphml {10}.paths
