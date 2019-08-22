@@ -9,3 +9,5 @@ Create the overlap graph from the filtered alignments.
 Tour the overlap graph components.
 
 ## `contigs.sh`
+
+Extract the sequences from the toured paths.
