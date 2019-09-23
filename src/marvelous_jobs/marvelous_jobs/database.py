@@ -213,6 +213,7 @@ class marvel_db:
         started_regex = re.compile(r'Starting job\(s\) ((\d+ ?)+)')
         completed_regex = re.compile(r'Finished job\(s\) ((\d+ ?)+)')
         failed_regex = re.compile(r'Failed job\(s\) ((\d+ ?)+)')
+        slurm_fail_regex = re.compile(r'slurmstepd: error: \*\*\*')
 
         start = time.time()
 
@@ -230,14 +231,18 @@ class marvel_db:
             if not jobid_match:
                 raise ValueError('no job id found in logfile')
             jobid = jobid_match.group(1)
+
+            last_start = None
             with open(full_fname) as f:
                 for line in f:
                     start_match = started_regex.search(line)
                     if start_match:
                         rowid = map(int, start_match.group(1).split())
+                        last_start = []
                         for ri in rowid:
                             if ri not in rowids:
                                 continue
+                            last_start.append(ri)
                             statuses[ri]['started'] = True
 
                     end_match = completed_regex.search(line)
@@ -254,6 +259,14 @@ class marvel_db:
                         for ri in rowid:
                             if ri not in rowids:
                                 continue
+                            statuses[ri]['failed'] = True
+
+                    slurm_fail_match = slurm_fail_regex.match(line)
+                    if slurm_fail_match and len(last_start) > 0:
+                        # Since we don't directly know what jobs failed
+                        # when SLURM fails, we set the last started jobs
+                        # as failed instead.
+                        for ri in last_start:
                             statuses[ri]['failed'] = True
 
         print('fetched status in {0}'.format(time.time() - start))
