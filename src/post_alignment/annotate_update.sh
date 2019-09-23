@@ -30,11 +30,12 @@ fi
 cd ${input_directory}
 
 # LAq parameters
+trim_quality_threshold=30
 min_n_segments=5
-input_trim_track=stitch_trim
-input_q_track=stitch_q
-output_trim_track=gap_trim
-output_q_track=gap_q
+input_trim_track=stitch_q${trim_quality_threshold}_trim
+input_q_track=stitch_q${trim_quality_threshold}_q
+output_trim_track=gap_q${trim_quality_threshold}_trim
+output_q_track=gap_q${trim_quality_threshold}_q
 
 # Avoid rerunning stuff that has already (potentially) finished
 afiles=$(find . -type f -name ".${database}.*.${output_trim_track}.a2" -size +0 | \
@@ -43,7 +44,7 @@ dfiles=$(find . -type f -name ".${database}.*.${output_trim_track}.d2" -size +0 
     xargs -n1 basename | sed 's/\.d2$//' | sort)
 
 finished_blocks=$(comm -12 <(echo "${afiles}") <(echo "${dfiles}") | grep -o '[0-9]\+' | sort)
-existing_blocks=$(find . -maxdepth 1 -type f -name "${database}.*.gap.las" | grep -o '[0-9]\+' | sort)
+existing_blocks=$(find . -maxdepth 1 -type f -name "${database}.*.gap_q${trim_quality_threshold}_trim.las" | grep -o '[0-9]\+' | sort)
 blocks_to_run=$(comm -13 <(echo "${finished_blocks}") <(echo "${existing_blocks}"))
 
 echo "Updating trim track for $(echo "${blocks_to_run}" | wc -l) blocks"
@@ -56,12 +57,13 @@ echo "${blocks_to_run}" | \
         LAq \
         -u \
         -b {} \
+        -d ${trim_quality_threshold} \
         -t ${input_trim_track} \
         -T ${output_trim_track} \
         -q ${input_q_track} \
         -Q ${output_q_track} \
         ${database} \
-        ${database}.{}.gap.las > /dev/null
+        ${database}.{}.gap_${trim_quality_threshold}_trim.las > /dev/null
 
 TKmerge -d ${database} ${output_trim_track}
 TKmerge -d ${database} ${output_q_track}

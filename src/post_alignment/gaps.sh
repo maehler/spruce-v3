@@ -4,7 +4,7 @@
 #SBATCH --partition=node
 #SBATCH --ntasks=20
 #SBATCH --cpus-per-task=1
-#SBATCH --time=2-00:00:00
+#SBATCH --time=20:00:00
 #SBATCH --job-name=spruce_gaps
 
 set -eu
@@ -24,8 +24,9 @@ database=$(head -n1 ${block_file} | cut -f1 -d.)
 blocks=$(cut -f2 -d. ${block_file})
 
 # LAgap parameters
+trim_quality_threshold=30
 min_distance=100
-trim_track=stitch_trim
+trim_track=stitch_q${trim_quality_threshold}_trim
 
 echo "# Working on blocks" ${blocks} "(${block_file})"
 
@@ -38,4 +39,4 @@ parallel -j20 \
     LAgap \
     -s ${min_distance} \
     -t ${trim_track} \
-    ${SNIC_TMP}/{1} {3} {1}.{2}.gap.las ::: ${database} ::: ${blocks} ::::+ ${block_file}
+    ${SNIC_TMP}/{1} {3} {1}.{2}.gap_q${trim_quality_threshold}_trim.las ::: ${database} ::: ${blocks} ::::+ ${block_file}

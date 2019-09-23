@@ -7,6 +7,7 @@ if [[ $# -ne 3 ]]; then
     exit 1
 fi
 
+trim_quality_threshold=30
 database=$1
 input_directory=$2
 max_blocks=$3
@@ -34,20 +35,28 @@ if [[ ! -d gap_tasks ]]; then
     mkdir gap_tasks
 fi
 
-start_block=$(find . -maxdepth 1 -type f -regex ".+${database}\.[0-9]+\.gap\.las" | \
+start_block=$(find . -maxdepth 1 -type f -regex ".+${database}\.[0-9]+\.gap_q${trim_quality_threshold}_trim\.las" | \
     xargs -n1 basename | \
     cut -f2 -d. | \
     sort -nr | \
     head -n1)
 
+input_blocks=$(find . -maxdepth 1 -type f -regex ".+${database}\.[0-9]+\.stitch\.las" | \
+    xargs -n1 basename | \
+    cut -f2 -d. | \
+    sort)
+output_blocks=$(find . -maxdepth 1 -type f -regex ".+${database}\.[0-9]+\.gap_q${trim_quality_threshold}_trim\.las" | \
+    xargs -n1 basename | \
+    cut -f2 -d. | \
+    sort)
+
+blocks_to_run=$(comm -32 <(echo "$input_blocks") <(echo "$output_blocks"))
+
 task_id=$(date +%s)
 task_file_prefix="gap_${task_id}_"
 
-find . -maxdepth 1 -type f -regex ".+${database}\.[0-9]+\.stitch\.las" | \
-    xargs -n1 basename | \
-    cut -f2 -d. | \
-    sort -n | \
-    awk -v database=${database} -v start_block=${start_block} '{if ($1 > start_block) {printf("%s.%d.stitch.las\n", database, $1)}}' | \
+echo "${blocks_to_run}" | \
+    xargs -n1 printf "${database}.%d.stitch.las\n" 2>/dev/null | \
     head -n ${max_blocks} | \
     split -l 20 - gap_tasks/${task_file_prefix}
 
