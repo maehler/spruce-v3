@@ -193,8 +193,9 @@ class prepare_job(marvel_job):
         args = [os.path.join(marvel.config.PATH_SCRIPTS, 'DBprepare.py'),
                 '--blocksize', blocksize]
 
-        for at in annotation_tracks:
-            args += ['-c', at]
+        if annotation_tracks is not None:
+            for at in annotation_tracks:
+                args += ['-c', at]
 
         args += [name, fasta]
         jobname = 'marvel_prepare'
